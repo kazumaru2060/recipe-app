@@ -266,6 +266,7 @@ export default function NewRecipePage() {
           <div className="space-y-3">
             {ingredients.map((row, i) => (
               <div key={row.key} className="space-y-2">
+                {/* 1行目：食材名 ＋ 削除ボタン */}
                 <div className="flex gap-2 items-start">
                   <div className="relative flex-1">
                     <input
@@ -290,23 +291,26 @@ export default function NewRecipePage() {
                       </div>
                     )}
                   </div>
-                  <input
-                    type="number" value={row.amount}
-                    onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, amount: e.target.value } : r))}
-                    placeholder="量"
-                    className="w-20 border border-stone-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    step="any" min="0"
-                  />
-                  <div className="w-16 text-center py-2 text-sm text-stone-500">{row.unit}</div>
-                  <div className="w-24 text-right py-2 text-sm font-medium text-orange-600">
-                    {calcCost(row) != null ? `¥${Math.round(calcCost(row)!).toLocaleString()}` : ''}
-                  </div>
                   <button
                     type="button"
                     onClick={() => setIngredients(prev => prev.filter(r => r.key !== row.key))}
                     disabled={ingredients.length === 1}
                     className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg disabled:opacity-30"
                   >×</button>
+                </div>
+                {/* 2行目：量 ＋ 単位 ＋ コスト */}
+                <div className="flex gap-2 items-center pl-1">
+                  <input
+                    type="number" value={row.amount}
+                    onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, amount: e.target.value } : r))}
+                    placeholder="量"
+                    className="w-24 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    step="any" min="0"
+                  />
+                  <span className="text-sm text-stone-500">{row.unit}</span>
+                  <span className="flex-1 text-right text-sm font-medium text-orange-600">
+                    {calcCost(row) != null ? `¥${Math.round(calcCost(row)!).toLocaleString()}` : ''}
+                  </span>
                 </div>
 
                 {row.isNew && !row.ingredientId && (
