@@ -13,10 +13,15 @@ export async function POST(request: NextRequest) {
 
   // Vercel 本番環境では Vercel Blob を使用、ローカルではファイル保存
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const filename = `recipes/${Date.now()}.${ext}`
-    const blob = await put(filename, file, { access: 'public' })
-    return Response.json({ path: blob.url })
+    try {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const filename = `recipes/${Date.now()}.${ext}`
+      const blob = await put(filename, file, { access: 'public' })
+      return Response.json({ path: blob.url })
+    } catch (err) {
+      console.error('Vercel Blob upload error:', err)
+      return Response.json({ error: String(err) }, { status: 500 })
+    }
   }
 
   const bytes = await file.arrayBuffer()

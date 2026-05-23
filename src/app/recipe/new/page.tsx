@@ -50,6 +50,7 @@ export default function NewRecipePage() {
   const [steps, setSteps] = useState<string[]>([''])
   const [ingredients, setIngredients] = useState<IngredientRow[]>([newIngRow()])
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -119,11 +120,25 @@ export default function NewRecipePage() {
     const file = e.target.files?.[0]
     if (!file) return
     setPhotoPreview(URL.createObjectURL(file))
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    const data = await res.json()
-    setPhotoPath(data.path)
+    setUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !data.path) {
+        setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`)
+        setPhotoPreview('')
+        return
+      }
+      setPhotoPath(data.path)
+    } catch {
+      setError('写真のアップロードに失敗しました。通信状況を確認してください。')
+      setPhotoPreview('')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -233,7 +248,10 @@ export default function NewRecipePage() {
               <input type="file" accept="image/*" onChange={handlePhotoChange}
                 className="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
               />
-              {photoPreview && (
+              {uploading && (
+                <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>
+              )}
+              {photoPreview && !uploading && (
                 <div className="mt-2 relative w-32 h-32 rounded-lg overflow-hidden">
                   <Image src={photoPreview} alt="プレビュー" fill className="object-cover" />
                 </div>
@@ -383,10 +401,10 @@ export default function NewRecipePage() {
 
         <div className="flex gap-3">
           <button
-            type="submit" disabled={saving}
+            type="submit" disabled={saving || uploading}
             className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-60 transition-colors"
           >
-            {saving ? '保存中...' : 'レシピを保存'}
+            {saving ? '保存中...' : uploading ? '写真アップロード中...' : 'レシピを保存'}
           </button>
           <button
             type="button"
