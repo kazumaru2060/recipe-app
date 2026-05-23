@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Ingredient {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  unit         String
+  pricePerUnit Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  recipeIngredients RecipeIngredient[]
+}
+
+model Recipe {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  photoPath    String?
+  referenceUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  versions RecipeVersion[]
+}
+
+model RecipeVersion {
+  id            Int      @id @default(autoincrement())
+  recipeId      Int
+  versionNumber Int
+  notes         String?
+  steps         String
+  createdAt     DateTime @default(now())
+
+  recipe      Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredients RecipeIngredient[]
+
+  @@unique([recipeId, versionNumber])
+}
+
+model RecipeIngredient {
+  id              Int     @id @default(autoincrement())
+  recipeVersionId Int
+  ingredientId    Int?
+  customName      String?
+  amount          Float
+  unit            String
+  manualCost      Float?
+
+  recipeVersion RecipeVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+  ingredient    Ingredient?   @relation(fields: [ingredientId], references: [id])
+}
