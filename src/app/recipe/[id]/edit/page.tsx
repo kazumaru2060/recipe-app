@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 
 interface IngredientMaster {
@@ -51,8 +51,11 @@ function newIngRow(): IngredientRow {
 export default function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const versionId = searchParams.get('versionId')
 
   const [loading, setLoading] = useState(true)
+  const [editingVersionNumber, setEditingVersionNumber] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
@@ -75,13 +78,18 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
         setPhotoPath(recipe.photoPath ?? '')
         if (recipe.photoPath) setPhotoPreview(recipe.photoPath)
 
-        const latestVersion = recipe.versions[recipe.versions.length - 1]
-        if (latestVersion) {
-          const parsedSteps: string[] = JSON.parse(latestVersion.steps)
+        // versionIdが指定されていればそのバージョン、なければ最新バージョンを編集
+        const targetVersion = versionId
+          ? recipe.versions.find((v: { id: number }) => v.id === parseInt(versionId))
+          : recipe.versions[recipe.versions.length - 1]
+
+        if (targetVersion) {
+          setEditingVersionNumber(targetVersion.versionNumber)
+          const parsedSteps: string[] = JSON.parse(targetVersion.steps)
           setSteps(parsedSteps.length > 0 ? parsedSteps : [''])
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const ingRows: IngredientRow[] = latestVersion.ingredients.map((ri: any) => ({
+          const ingRows: IngredientRow[] = targetVersion.ingredients.map((ri: any) => ({
             key: Math.random().toString(36).slice(2),
             name: ri.ingredient?.name ?? ri.customName ?? '',
             ingredientId: ri.ingredientId ?? undefined,
@@ -97,6 +105,10 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
             showSuggestions: false,
           }))
           setIngredients(ingRows.length > 0 ? ingRows : [newIngRow()])
+        } else {
+          setLoading(false)
+          setError('指定されたバージョンが見つかりません')
+          return
         }
         setLoading(false)
       })
@@ -222,6 +234,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
           description: description.trim() || null,
           photoPath: photoPath || null,
           referenceUrl: referenceUrl.trim() || null,
+          versionId: versionId,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
             ingredientId: r.ingredientId ?? null,
@@ -259,8 +272,13 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-stone-800 mb-1">レシピを編集</h1>
-      <p className="text-sm text-stone-400 mb-6">最新バージョンの内容を直接修正します（バージョンは増えません）</p>
+      <h1 className="text-2xl font-bold text-stone-800 mb-1">
+        レシピを編集
+        {editingVersionNumber != null && (
+          <span className="ml-2 text-lg font-normal text-orange-500">v{editingVersionNumber}</span>
+        )}
+      </h1>
+      <p className="text-sm text-stone-400 mb-6">このバージョンの内容を直接修正します（他のバージョンは変わりません）</p>
       <form onSubmit={handleSubmit} className="space-y-6">
 
         {/* 基本情報 */}

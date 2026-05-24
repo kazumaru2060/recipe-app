@@ -30,7 +30,7 @@ export async function PUT(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { name, description, photoPath, referenceUrl, steps, ingredients } = body
+  const { name, description, photoPath, referenceUrl, steps, ingredients, versionId } = body
 
   const recipeId = parseInt(id)
 
@@ -45,42 +45,37 @@ export async function PUT(
     },
   })
 
-  // 最新バージョンの材料・手順を更新
-  if (steps !== undefined && ingredients !== undefined) {
-    const latestVersion = await prisma.recipeVersion.findFirst({
-      where: { recipeId },
-      orderBy: { versionNumber: 'desc' },
+  // 指定バージョンの材料・手順を更新
+  if (steps !== undefined && ingredients !== undefined && versionId) {
+    const targetVersionId = parseInt(versionId)
+
+    // 既存の材料を削除して新しい材料で置き換え
+    await prisma.recipeIngredient.deleteMany({
+      where: { recipeVersionId: targetVersionId },
     })
 
-    if (latestVersion) {
-      // 既存の材料を削除して新しい材料で置き換え
-      await prisma.recipeIngredient.deleteMany({
-        where: { recipeVersionId: latestVersion.id },
-      })
+    await prisma.recipeVersion.update({
+      where: { id: targetVersionId },
+      data: { steps: JSON.stringify(steps) },
+    })
 
-      await prisma.recipeVersion.update({
-        where: { id: latestVersion.id },
-        data: { steps: JSON.stringify(steps) },
+    if (ingredients.length > 0) {
+      await prisma.recipeIngredient.createMany({
+        data: (ingredients as {
+          ingredientId?: number | null
+          customName?: string | null
+          amount: number
+          unit: string
+          manualCost?: number | null
+        }[]).map(ing => ({
+          recipeVersionId: targetVersionId,
+          ingredientId: ing.ingredientId ?? null,
+          customName: ing.customName ?? null,
+          amount: ing.amount,
+          unit: ing.unit,
+          manualCost: ing.manualCost ?? null,
+        })),
       })
-
-      if (ingredients.length > 0) {
-        await prisma.recipeIngredient.createMany({
-          data: (ingredients as {
-            ingredientId?: number | null
-            customName?: string | null
-            amount: number
-            unit: string
-            manualCost?: number | null
-          }[]).map(ing => ({
-            recipeVersionId: latestVersion.id,
-            ingredientId: ing.ingredientId ?? null,
-            customName: ing.customName ?? null,
-            amount: ing.amount,
-            unit: ing.unit,
-            manualCost: ing.manualCost ?? null,
-          })),
-        })
-      }
     }
   }
 

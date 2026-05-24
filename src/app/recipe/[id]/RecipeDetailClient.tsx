@@ -81,10 +81,10 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
         </div>
         <div className="flex gap-2 flex-shrink-0">
           <Link
-            href={`/recipe/${recipe.id}/edit`}
+            href={`/recipe/${recipe.id}/edit?versionId=${activeVersion?.id}`}
             className="bg-orange-100 text-orange-700 px-4 py-1.5 rounded-full text-sm font-medium hover:bg-orange-200 transition-colors"
           >
-            編集
+            v{activeVersion?.versionNumber} 編集
           </Link>
           <Link
             href={`/recipe/${recipe.id}/improve`}
