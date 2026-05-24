@@ -56,6 +56,9 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
 
   const [loading, setLoading] = useState(true)
   const [editingVersionNumber, setEditingVersionNumber] = useState<number | null>(null)
+  const [versionPhotoPath, setVersionPhotoPath] = useState('')
+  const [versionPhotoPreview, setVersionPhotoPreview] = useState('')
+  const [versionPhotoUploading, setVersionPhotoUploading] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
@@ -85,6 +88,10 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
 
         if (targetVersion) {
           setEditingVersionNumber(targetVersion.versionNumber)
+          if (targetVersion.photoPath) {
+            setVersionPhotoPath(targetVersion.photoPath)
+            setVersionPhotoPreview(targetVersion.photoPath)
+          }
           const parsedSteps: string[] = JSON.parse(targetVersion.steps)
           setSteps(parsedSteps.length > 0 ? parsedSteps : [''])
 
@@ -195,6 +202,30 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleVersionPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setVersionPhotoPreview(URL.createObjectURL(file))
+    setVersionPhotoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !data.path) {
+        setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`)
+        setVersionPhotoPreview(versionPhotoPath)
+        return
+      }
+      setVersionPhotoPath(data.path)
+    } catch {
+      setError('写真のアップロードに失敗しました。')
+      setVersionPhotoPreview(versionPhotoPath)
+    } finally {
+      setVersionPhotoUploading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -235,6 +266,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
           photoPath: photoPath || null,
           referenceUrl: referenceUrl.trim() || null,
           versionId: versionId,
+          versionPhotoPath: versionPhotoPath || null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
             ingredientId: r.ingredientId ?? null,
@@ -322,6 +354,33 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
               {uploading && <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>}
             </div>
           </div>
+        </section>
+
+        {/* このバージョンの写真 */}
+        <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
+          <h2 className="text-base font-semibold text-stone-700 mb-1">
+            このバージョンの写真（任意）
+          </h2>
+          <p className="text-xs text-stone-400 mb-3">
+            このバージョン専用の写真です。詳細ページで「ホームに設定」ボタンで表示写真を選べます
+          </p>
+          {versionPhotoPreview && !versionPhotoUploading && (
+            <div className="mb-2 relative w-32 h-32 rounded-lg overflow-hidden">
+              <Image src={versionPhotoPreview} alt="バージョンの写真" fill className="object-cover" />
+            </div>
+          )}
+          <input type="file" accept="image/*" onChange={handleVersionPhotoChange}
+            className="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {versionPhotoUploading && <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>}
+          {versionPhotoPath && (
+            <button type="button"
+              onClick={() => { setVersionPhotoPath(''); setVersionPhotoPreview('') }}
+              className="mt-2 text-xs text-red-500 hover:text-red-700"
+            >
+              × 写真を削除
+            </button>
+          )}
         </section>
 
         {/* 材料 */}

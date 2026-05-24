@@ -15,6 +15,7 @@ interface RecipeIngredient {
 }
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string; createdAt: string
+  photoPath: string | null
   ingredients: RecipeIngredient[]
 }
 interface Recipe {
@@ -65,6 +66,15 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
     if (!confirm('このレシピを削除しますか？')) return
     await fetch(`/api/recipes/${recipe.id}`, { method: 'DELETE' })
     router.push('/')
+  }
+
+  const handleSetCoverPhoto = async (photoPath: string) => {
+    await fetch(`/api/recipes/${recipe.id}/cover-photo`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photoPath }),
+    })
+    router.refresh()
   }
 
   const compareVersion = compareIndex != null ? recipe.versions[compareIndex] : null
@@ -174,10 +184,32 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
         </div>
       )}
 
-      {/* 写真 */}
-      {recipe.photoPath && (
-        <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-sm">
-          <Image src={recipe.photoPath} alt={recipe.name} fill className="object-cover" />
+      {/* 写真（カバー or アクティブバージョンの写真） */}
+      {(activeVersion?.photoPath || recipe.photoPath) && (
+        <div className="space-y-2">
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden shadow-sm">
+            <Image
+              src={activeVersion?.photoPath || recipe.photoPath!}
+              alt={recipe.name}
+              fill
+              className="object-cover"
+            />
+          </div>
+          {/* バージョン固有の写真がある場合、ホーム設定ボタンを表示 */}
+          {activeVersion?.photoPath && activeVersion.photoPath !== recipe.photoPath && (
+            <button
+              onClick={() => handleSetCoverPhoto(activeVersion.photoPath!)}
+              className="w-full text-sm bg-orange-50 text-orange-700 border border-orange-200 rounded-lg py-2 hover:bg-orange-100 transition-colors"
+            >
+              🏠 この写真をホーム画面の表示写真に設定する
+            </button>
+          )}
+          {activeVersion?.photoPath && activeVersion.photoPath === recipe.photoPath && (
+            <p className="text-center text-xs text-orange-500">✓ この写真がホーム画面に表示されています</p>
+          )}
+          {!activeVersion?.photoPath && recipe.photoPath && (
+            <p className="text-center text-xs text-stone-400">（このバージョンに写真はありません。カバー写真を表示中）</p>
+          )}
         </div>
       )}
 

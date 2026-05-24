@@ -36,6 +36,7 @@ model RecipeVersion {
   versionNumber Int
   notes         String?
   steps         String
+  photoPath     String?
   createdAt     DateTime @default(now())
 
   recipe      Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)

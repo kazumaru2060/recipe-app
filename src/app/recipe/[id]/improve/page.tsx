@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
@@ -41,6 +42,9 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
   const [notes, setNotes] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
   const [ingredients, setIngredients] = useState<IngredientRow[]>([])
+  const [photoPath, setPhotoPath] = useState('')
+  const [photoPreview, setPhotoPreview] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -100,6 +104,31 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
     ))
   }
 
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoPreview(URL.createObjectURL(file))
+    setUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !data.path) {
+        setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`)
+        setPhotoPreview('')
+        return
+      }
+      setPhotoPath(data.path)
+    } catch {
+      setError('写真のアップロードに失敗しました。')
+      setPhotoPreview('')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleIngBlur = (key: string) => {
     setTimeout(async () => {
       const row = ingredients.find(r => r.key === key)
@@ -153,6 +182,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notes: notes.trim(),
+          photoPath: photoPath || null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
             ingredientId: r.ingredientId ?? null,
@@ -203,6 +233,21 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
             rows={3}
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
           />
+        </section>
+
+        {/* このバージョンの写真（任意） */}
+        <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
+          <h2 className="text-base font-semibold text-stone-700 mb-1">このバージョンの写真（任意）</h2>
+          <p className="text-xs text-stone-400 mb-3">前のバージョンと異なる見た目になった場合など、任意で追加できます</p>
+          <input type="file" accept="image/*" onChange={handlePhotoChange}
+            className="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+          />
+          {uploading && <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>}
+          {photoPreview && !uploading && (
+            <div className="mt-2 relative w-32 h-32 rounded-lg overflow-hidden">
+              <Image src={photoPreview} alt="プレビュー" fill className="object-cover" />
+            </div>
+          )}
         </section>
 
         {/* 材料（前バージョンからコピー済み） */}
@@ -305,9 +350,9 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         {error && <p className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
         <div className="flex gap-3">
-          <button type="submit" disabled={saving}
+          <button type="submit" disabled={saving || uploading}
             className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-semibold hover:bg-blue-600 disabled:opacity-60 transition-colors">
-            {saving ? '保存中...' : '改善版を保存'}
+            {saving ? '保存中...' : uploading ? '写真アップロード中...' : '改善版を保存'}
           </button>
           <button type="button" onClick={() => router.back()}
             className="bg-stone-100 text-stone-700 px-6 py-3 rounded-xl font-medium hover:bg-stone-200 transition-colors">
