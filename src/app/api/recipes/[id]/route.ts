@@ -70,6 +70,7 @@ export async function PUT(
           amount: number
           unit: string
           manualCost?: number | null
+          sectionName?: string | null
         }[]).map(ing => ({
           recipeVersionId: targetVersionId,
           ingredientId: ing.ingredientId ?? null,
@@ -77,6 +78,7 @@ export async function PUT(
           amount: ing.amount,
           unit: ing.unit,
           manualCost: ing.manualCost ?? null,
+          sectionName: ing.sectionName ?? null,
         })),
       })
     }

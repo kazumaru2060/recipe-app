@@ -33,12 +33,14 @@ export async function POST(
           amount: number
           unit: string
           manualCost?: number
+          sectionName?: string
         }) => ({
           ingredientId: ing.ingredientId ?? null,
           customName: ing.customName ?? null,
           amount: ing.amount,
           unit: ing.unit,
           manualCost: ing.manualCost ?? null,
+          sectionName: ing.sectionName ?? null,
         })),
       },
     },

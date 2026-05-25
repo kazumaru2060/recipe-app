@@ -10,7 +10,7 @@ interface IngredientMaster {
 }
 interface RecipeIngredient {
   id: number; ingredientId: number | null; customName: string | null
-  amount: number; unit: string; manualCost: number | null
+  amount: number; unit: string; manualCost: number | null; sectionName: string | null
   ingredient: IngredientMaster | null
 }
 interface RecipeVersion {
@@ -241,21 +241,39 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
             </tr>
           </thead>
           <tbody>
-            {activeVersion?.ingredients.map(ri => {
-              const c = ri.ingredient ? ri.amount * ri.ingredient.pricePerUnit : ri.manualCost
-              return (
-                <tr key={ri.id} className="border-b border-stone-50">
-                  <td className="py-2 font-medium text-stone-800">
-                    {getIngName(ri)}
-                    {!ri.ingredient && <span className="ml-1 text-xs text-stone-400">(手動)</span>}
-                  </td>
-                  <td className="py-2 text-right text-stone-600">{ri.amount}{ri.unit}</td>
-                  <td className="py-2 text-right text-orange-600">
-                    {c != null ? `¥${Math.round(c).toLocaleString()}` : '-'}
-                  </td>
-                </tr>
-              )
-            })}
+            {(() => {
+              const rows: React.ReactNode[] = []
+              let prevSec: string | null | undefined = undefined
+              activeVersion?.ingredients.forEach(ri => {
+                const sec = ri.sectionName ?? null
+                if (sec !== prevSec) {
+                  prevSec = sec
+                  if (sec) {
+                    rows.push(
+                      <tr key={`sec-${sec}`}>
+                        <td colSpan={3} className="pt-3 pb-1">
+                          <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">📂 {sec}</span>
+                        </td>
+                      </tr>
+                    )
+                  }
+                }
+                const c = ri.ingredient ? ri.amount * ri.ingredient.pricePerUnit : ri.manualCost
+                rows.push(
+                  <tr key={ri.id} className="border-b border-stone-50">
+                    <td className={`py-2 font-medium text-stone-800${sec ? ' pl-3' : ''}`}>
+                      {getIngName(ri)}
+                      {!ri.ingredient && <span className="ml-1 text-xs text-stone-400">(手動)</span>}
+                    </td>
+                    <td className="py-2 text-right text-stone-600">{ri.amount}{ri.unit}</td>
+                    <td className="py-2 text-right text-orange-600">
+                      {c != null ? `¥${Math.round(c).toLocaleString()}` : '-'}
+                    </td>
+                  </tr>
+                )
+              })
+              return rows
+            })()}
           </tbody>
         </table>
       </div>

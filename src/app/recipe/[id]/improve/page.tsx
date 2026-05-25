@@ -7,32 +7,44 @@ import Image from 'next/image'
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
 }
-interface RecipeIngredient {
-  id: number; ingredientId: number | null; customName: string | null
-  amount: number; unit: string; manualCost: number | null
-  ingredient: IngredientMaster | null
+
+interface SectionItem { type: 'section'; key: string; name: string }
+interface IngredientItem {
+  type: 'ingredient'; key: string; name: string; ingredientId?: number
+  unit: string; amount: string; pricePerUnit?: number; manualCost: string
+  isNew: boolean; newUnit: string; newPricePerUnit: string; showMasterForm: boolean
+  suggestions: IngredientMaster[]; showSuggestions: boolean
 }
+type ListItem = SectionItem | IngredientItem
+
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string
-  ingredients: RecipeIngredient[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ingredients: any[]
 }
 interface Recipe {
   id: number; name: string; versions: RecipeVersion[]
 }
 
-interface IngredientRow {
-  key: string
-  name: string
-  ingredientId?: number
-  unit: string
-  amount: string
-  pricePerUnit?: number
-  manualCost: string
-  isNew: boolean
-  newUnit: string
-  newPricePerUnit: string
-  suggestions: IngredientMaster[]
-  showSuggestions: boolean
+function newIngRow(): IngredientItem {
+  return { type: 'ingredient', key: Math.random().toString(36).slice(2), name: '', ingredientId: undefined, unit: 'g', amount: '', pricePerUnit: undefined, manualCost: '', isNew: false, newUnit: 'g', newPricePerUnit: '', showMasterForm: false, suggestions: [], showSuggestions: false }
+}
+function newSectionRow(name = ''): SectionItem {
+  return { type: 'section', key: Math.random().toString(36).slice(2), name }
+}
+function itemsToSubmit(items: ListItem[]) {
+  let sec: string | null = null
+  return items.flatMap(it => { if (it.type === 'section') { sec = it.name.trim() || null; return [] } return [{ ...it, sectionName: sec }] })
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ingredientsToItems(ings: any[]): ListItem[] {
+  const result: ListItem[] = []; let curSec: string | null | undefined = undefined
+  for (const ri of ings) {
+    const sec = ri.sectionName ?? null
+    if (sec !== curSec) { if (sec) result.push(newSectionRow(sec)); curSec = sec }
+    result.push({ type: 'ingredient', key: Math.random().toString(36).slice(2), name: ri.ingredient?.name ?? ri.customName ?? '', ingredientId: ri.ingredientId ?? undefined, unit: ri.unit, amount: String(ri.amount), pricePerUnit: ri.ingredient?.pricePerUnit, manualCost: ri.manualCost != null ? String(ri.manualCost) : '', isNew: false, newUnit: ri.unit, newPricePerUnit: '', showMasterForm: false, suggestions: [], showSuggestions: false })
+  }
+  return result.length > 0 ? result : [newIngRow()]
 }
 
 export default function ImprovePage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,7 +53,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [notes, setNotes] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
-  const [ingredients, setIngredients] = useState<IngredientRow[]>([])
+  const [items, setItems] = useState<ListItem[]>([newIngRow()])
   const [photoPath, setPhotoPath] = useState('')
   const [photoPreview, setPhotoPreview] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -58,50 +70,41 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         if (latest) {
           const existingSteps: string[] = JSON.parse(latest.steps)
           setSteps(existingSteps.length > 0 ? existingSteps : [''])
-          setIngredients(latest.ingredients.map(ri => ({
-            key: Math.random().toString(36).slice(2),
-            name: ri.ingredient?.name ?? ri.customName ?? '',
-            ingredientId: ri.ingredientId ?? undefined,
-            unit: ri.unit,
-            amount: String(ri.amount),
-            pricePerUnit: ri.ingredient?.pricePerUnit,
-            manualCost: ri.manualCost != null ? String(ri.manualCost) : '',
-            isNew: false,
-            newUnit: 'g',
-            newPricePerUnit: '',
-            suggestions: [],
-            showSuggestions: false,
-          })))
+          setItems(ingredientsToItems(latest.ingredients))
         }
       })
   }, [id])
 
+  const updIng = (key: string, patch: Partial<IngredientItem>) =>
+    setItems(prev => prev.map(it => it.type === 'ingredient' && it.key === key ? { ...it, ...patch } : it))
+
   const searchIngredients = async (query: string, rowKey: string) => {
-    if (!query) {
-      setIngredients(prev => prev.map(r => r.key === rowKey ? { ...r, suggestions: [], showSuggestions: false } : r))
-      return
-    }
+    if (!query) { updIng(rowKey, { suggestions: [], showSuggestions: false }); return }
     const res = await fetch(`/api/ingredients?q=${encodeURIComponent(query)}`)
     const data: IngredientMaster[] = await res.json()
-    setIngredients(prev => prev.map(r =>
-      r.key === rowKey ? { ...r, suggestions: data, showSuggestions: true } : r
-    ))
+    updIng(rowKey, { suggestions: data, showSuggestions: true })
   }
 
   const handleIngNameChange = (key: string, value: string) => {
-    setIngredients(prev => prev.map(r =>
-      r.key === key ? { ...r, name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false } : r
-    ))
+    updIng(key, { name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false, showMasterForm: false })
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => searchIngredients(value, key), 200)
   }
 
   const handleSelectSuggestion = (key: string, ing: IngredientMaster) => {
-    setIngredients(prev => prev.map(r =>
-      r.key === key
-        ? { ...r, name: ing.name, ingredientId: ing.id, unit: ing.unit, pricePerUnit: ing.pricePerUnit, isNew: false, showSuggestions: false, suggestions: [] }
-        : r
-    ))
+    updIng(key, { name: ing.name, ingredientId: ing.id, unit: ing.unit, pricePerUnit: ing.pricePerUnit, isNew: false, showMasterForm: false, showSuggestions: false, suggestions: [] })
+  }
+
+  const handleIngBlur = (key: string) => {
+    setTimeout(async () => {
+      const row = items.find(it => it.type === 'ingredient' && it.key === key) as IngredientItem | undefined
+      if (!row || !row.name || row.ingredientId) { updIng(key, { showSuggestions: false }); return }
+      const res = await fetch(`/api/ingredients?q=${encodeURIComponent(row.name)}`)
+      const data: IngredientMaster[] = await res.json()
+      const exact = data.find(d => d.name === row.name)
+      if (exact) updIng(key, { ingredientId: exact.id, unit: exact.unit, pricePerUnit: exact.pricePerUnit, showSuggestions: false })
+      else if (row.name) updIng(key, { isNew: true, showMasterForm: true, showSuggestions: false })
+    }, 150)
   }
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,34 +132,13 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
     }
   }
 
-  const handleIngBlur = (key: string) => {
-    setTimeout(async () => {
-      const row = ingredients.find(r => r.key === key)
-      if (!row || !row.name || row.ingredientId) {
-        setIngredients(prev => prev.map(r => r.key === key ? { ...r, showSuggestions: false } : r))
-        return
-      }
-      const res = await fetch(`/api/ingredients?q=${encodeURIComponent(row.name)}`)
-      const data: IngredientMaster[] = await res.json()
-      const exact = data.find(d => d.name === row.name)
-      if (exact) {
-        setIngredients(prev => prev.map(r =>
-          r.key === key ? { ...r, ingredientId: exact.id, unit: exact.unit, pricePerUnit: exact.pricePerUnit, showSuggestions: false } : r
-        ))
-      } else if (row.name) {
-        setIngredients(prev => prev.map(r =>
-          r.key === key ? { ...r, isNew: true, showSuggestions: false } : r
-        ))
-      }
-    }, 150)
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (!notes.trim()) { setError('改善メモを入力してください（何を変えたか）'); return }
 
-    const filledIngredients = ingredients.filter(r => r.name.trim())
+    const submitItems = itemsToSubmit(items)
+    const filledIngredients = submitItems.filter(r => r.name.trim())
 
     const newIngs = filledIngredients.filter(r => r.isNew && !r.ingredientId)
     for (const ni of newIngs) {
@@ -168,6 +150,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         })
         if (res.ok) {
           const created: IngredientMaster = await res.json()
+          updIng(ni.key, { ingredientId: created.id, unit: created.unit, pricePerUnit: created.pricePerUnit })
           filledIngredients.forEach(fi => {
             if (fi.key === ni.key) { fi.ingredientId = created.id; fi.unit = created.unit; fi.pricePerUnit = created.pricePerUnit }
           })
@@ -190,6 +173,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
             amount: parseFloat(r.amount) || 0,
             unit: r.unit,
             manualCost: (!r.ingredientId && r.manualCost) ? parseFloat(r.manualCost) : null,
+            sectionName: r.sectionName ?? null,
           })),
         }),
       })
@@ -207,13 +191,6 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
   }
 
   if (!recipe) return <div className="text-center py-20 text-stone-400">読み込み中...</div>
-
-  const newRow = (): IngredientRow => ({
-    key: Math.random().toString(36).slice(2),
-    name: '', ingredientId: undefined, unit: 'g', amount: '',
-    pricePerUnit: undefined, manualCost: '', isNew: false,
-    newUnit: 'g', newPricePerUnit: '', suggestions: [], showSuggestions: false,
-  })
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -250,75 +227,108 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
           )}
         </section>
 
-        {/* 材料（前バージョンからコピー済み） */}
+        {/* 材料 */}
         <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
           <h2 className="text-base font-semibold text-stone-700 mb-2">材料（前バージョンから編集できます）</h2>
           <p className="text-xs text-stone-400 mb-4">変更した箇所だけ修正してください</p>
           <div className="space-y-3">
-            {ingredients.map((row) => (
-              <div key={row.key} className="space-y-1">
-                <div className="flex gap-2 items-start">
-                  <div className="relative flex-1">
+            {items.map((item) => {
+              if (item.type === 'section') {
+                return (
+                  <div key={item.key} className="flex gap-2 items-center pt-2">
+                    <span className="text-orange-400 text-sm">📂</span>
                     <input
-                      type="text" value={row.name}
-                      onChange={e => handleIngNameChange(row.key, e.target.value)}
-                      onBlur={() => handleIngBlur(row.key)}
-                      onFocus={() => row.name && searchIngredients(row.name, row.key)}
-                      placeholder="食材名"
-                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${row.ingredientId ? 'border-green-400 bg-green-50' : row.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`}
+                      type="text" value={item.name}
+                      onChange={e => setItems(prev => prev.map(it => it.key === item.key ? { ...it, name: e.target.value } : it))}
+                      placeholder="セクション名（例: タルト生地）"
+                      className="flex-1 border-0 border-b-2 border-orange-300 bg-transparent px-1 py-1 text-sm font-semibold text-orange-700 focus:outline-none focus:border-orange-500"
                     />
-                    {row.showSuggestions && row.suggestions.length > 0 && (
-                      <div className="absolute z-10 top-full left-0 right-0 bg-white border border-stone-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
-                        {row.suggestions.map(s => (
-                          <button key={s.id} type="button" onMouseDown={() => handleSelectSuggestion(row.key, s)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between">
-                            <span>{s.name}</span>
-                            <span className="text-stone-400 text-xs">¥{s.pricePerUnit}/{s.unit}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
+                      className="text-stone-300 hover:text-red-400 px-1 text-lg"
+                    >×</button>
                   </div>
-                  <input
-                    type="number" value={row.amount}
-                    onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, amount: e.target.value } : r))}
-                    placeholder="量" className="w-20 border border-stone-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    step="any" min="0"
-                  />
-                  <div className="w-16 text-center py-2 text-sm text-stone-500">{row.unit}</div>
-                  <button type="button"
-                    onClick={() => setIngredients(prev => prev.filter(r => r.key !== row.key))}
-                    className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg"
-                  >×</button>
-                </div>
-                {row.isNew && !row.ingredientId && (
-                  <div className="ml-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-xs text-orange-700 font-medium mb-2">新しい食材です。単価を入力するとマスタに登録されます。</p>
-                    <div className="flex gap-2 flex-wrap">
-                      <div>
-                        <label className="text-xs text-stone-600">単位</label>
-                        <select value={row.newUnit}
-                          onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, newUnit: e.target.value, unit: e.target.value } : r))}
-                          className="mt-0.5 block border border-stone-300 rounded px-2 py-1 text-xs">
-                          {['g', 'ml', '個', '枚', '本', '袋', '缶'].map(u => <option key={u}>{u}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs text-stone-600">単価(¥/単位)</label>
-                        <input type="number" value={row.newPricePerUnit} step="0.01" min="0"
-                          onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, newPricePerUnit: e.target.value } : r))}
-                          className="mt-0.5 block w-20 border border-stone-300 rounded px-2 py-1 text-xs" />
+                )
+              }
+              const row = item
+              return (
+                <div key={row.key} className="space-y-2 pl-4 border-l-2 border-stone-100">
+                  <div className="flex gap-2 items-start">
+                    <div className="relative flex-1">
+                      <input
+                        type="text" value={row.name}
+                        onChange={e => handleIngNameChange(row.key, e.target.value)}
+                        onBlur={() => handleIngBlur(row.key)}
+                        onFocus={() => row.name && searchIngredients(row.name, row.key)}
+                        placeholder="食材名"
+                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${row.ingredientId ? 'border-green-400 bg-green-50' : row.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`}
+                      />
+                      {row.showSuggestions && row.suggestions.length > 0 && (
+                        <div className="absolute z-10 top-full left-0 right-0 bg-white border border-stone-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                          {row.suggestions.map(s => (
+                            <button key={s.id} type="button" onMouseDown={() => handleSelectSuggestion(row.key, s)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between">
+                              <span>{s.name}</span>
+                              <span className="text-stone-400 text-xs">¥{s.pricePerUnit}/{s.unit}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button type="button"
+                      onClick={() => setItems(prev => prev.filter(it => it.key !== row.key))}
+                      className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg"
+                    >×</button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number" value={row.amount}
+                      onChange={e => updIng(row.key, { amount: e.target.value })}
+                      placeholder="量"
+                      className="w-24 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      step="any" min="0"
+                    />
+                    <span className="text-sm text-stone-500">{row.unit}</span>
+                  </div>
+                  {row.isNew && !row.ingredientId && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-xs text-orange-700 font-medium mb-2">新しい食材です。単価を入力するとマスタに登録されます。</p>
+                      <div className="flex gap-2 flex-wrap">
+                        <div>
+                          <label className="text-xs text-stone-600">単位</label>
+                          <select value={row.newUnit}
+                            onChange={e => updIng(row.key, { newUnit: e.target.value, unit: e.target.value })}
+                            className="mt-0.5 block border border-stone-300 rounded px-2 py-1 text-xs">
+                            {['g', 'ml', '個', '枚', '本', '袋', '缶', '大さじ', '小さじ', 'カップ'].map(u => <option key={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-stone-600">単価(¥/単位)</label>
+                          <input type="number" value={row.newPricePerUnit} step="0.01" min="0"
+                            onChange={e => updIng(row.key, { newPricePerUnit: e.target.value })}
+                            className="mt-0.5 block w-24 border border-stone-300 rounded px-2 py-1 text-xs" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                  {row.ingredientId && (
+                    <p className="text-xs text-green-600 ml-2">✓ マスタから取得 (¥{row.pricePerUnit}/{row.unit})</p>
+                  )}
+                </div>
+              )
+            })}
           </div>
-          <button type="button" onClick={() => setIngredients(prev => [...prev, newRow()])}
-            className="mt-3 text-orange-600 hover:text-orange-700 text-sm font-medium">
-            + 食材を追加
-          </button>
+          <div className="mt-3 flex gap-3">
+            <button type="button" onClick={() => setItems(prev => [...prev, newIngRow()])}
+              className="text-orange-600 hover:text-orange-700 text-sm font-medium">
+              + 材料を追加
+            </button>
+            <button type="button" onClick={() => setItems(prev => [...prev, newSectionRow()])}
+              className="text-orange-400 hover:text-orange-600 text-sm font-medium">
+              📂 セクションを追加
+            </button>
+          </div>
         </section>
 
         {/* 手順 */}

@@ -11,7 +11,14 @@ interface IngredientMaster {
   pricePerUnit: number
 }
 
-interface IngredientRow {
+interface SectionItem {
+  type: 'section'
+  key: string
+  name: string
+}
+
+interface IngredientItem {
+  type: 'ingredient'
   key: string
   name: string
   ingredientId?: number
@@ -27,17 +34,26 @@ interface IngredientRow {
   showSuggestions: boolean
 }
 
-function calcCost(row: IngredientRow): number | null {
+type ListItem = SectionItem | IngredientItem
+
+function calcCost(row: IngredientItem): number | null {
   const amount = parseFloat(row.amount)
   if (isNaN(amount)) return null
-  if (row.ingredientId && row.pricePerUnit != null) {
-    return amount * row.pricePerUnit
-  }
+  if (row.ingredientId && row.pricePerUnit != null) return amount * row.pricePerUnit
   if (!row.ingredientId) {
     const mc = parseFloat(row.manualCost)
     if (!isNaN(mc)) return mc
   }
   return null
+}
+
+// items配列を材料送信データに変換（セクション名を各材料に付与）
+function itemsToSubmit(items: ListItem[]) {
+  let currentSection: string | null = null
+  return items.flatMap(item => {
+    if (item.type === 'section') { currentSection = item.name.trim() || null; return [] }
+    return [{ ...item, sectionName: currentSection }]
+  })
 }
 
 export default function NewRecipePage() {
@@ -48,14 +64,15 @@ export default function NewRecipePage() {
   const [photoPath, setPhotoPath] = useState('')
   const [photoPreview, setPhotoPreview] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
-  const [ingredients, setIngredients] = useState<IngredientRow[]>([newIngRow()])
+  const [items, setItems] = useState<ListItem[]>([newIngRow()])
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function newIngRow(): IngredientRow {
+  function newIngRow(): IngredientItem {
     return {
+      type: 'ingredient',
       key: Math.random().toString(36).slice(2),
       name: '', ingredientId: undefined, unit: 'g', amount: '',
       pricePerUnit: undefined, manualCost: '', isNew: false,
@@ -64,55 +81,39 @@ export default function NewRecipePage() {
     }
   }
 
+  function newSectionRow(): SectionItem {
+    return { type: 'section', key: Math.random().toString(36).slice(2), name: '' }
+  }
+
+  const updIng = (key: string, patch: Partial<IngredientItem>) =>
+    setItems(prev => prev.map(it => it.type === 'ingredient' && it.key === key ? { ...it, ...patch } : it))
+
   const searchIngredients = async (query: string, rowKey: string) => {
-    if (!query) {
-      setIngredients(prev => prev.map(r => r.key === rowKey ? { ...r, suggestions: [], showSuggestions: false } : r))
-      return
-    }
+    if (!query) { updIng(rowKey, { suggestions: [], showSuggestions: false }); return }
     const res = await fetch(`/api/ingredients?q=${encodeURIComponent(query)}`)
     const data: IngredientMaster[] = await res.json()
-    setIngredients(prev => prev.map(r =>
-      r.key === rowKey ? { ...r, suggestions: data, showSuggestions: true } : r
-    ))
+    updIng(rowKey, { suggestions: data, showSuggestions: true })
   }
 
   const handleIngNameChange = (key: string, value: string) => {
-    setIngredients(prev => prev.map(r =>
-      r.key === key
-        ? { ...r, name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false, showMasterForm: false }
-        : r
-    ))
+    updIng(key, { name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false, showMasterForm: false })
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => searchIngredients(value, key), 200)
   }
 
   const handleSelectSuggestion = (key: string, ing: IngredientMaster) => {
-    setIngredients(prev => prev.map(r =>
-      r.key === key
-        ? { ...r, name: ing.name, ingredientId: ing.id, unit: ing.unit, pricePerUnit: ing.pricePerUnit, isNew: false, showMasterForm: false, showSuggestions: false, suggestions: [] }
-        : r
-    ))
+    updIng(key, { name: ing.name, ingredientId: ing.id, unit: ing.unit, pricePerUnit: ing.pricePerUnit, isNew: false, showMasterForm: false, showSuggestions: false, suggestions: [] })
   }
 
   const handleIngBlur = async (key: string) => {
     setTimeout(async () => {
-      const row = ingredients.find(r => r.key === key)
-      if (!row || !row.name || row.ingredientId) {
-        setIngredients(prev => prev.map(r => r.key === key ? { ...r, showSuggestions: false } : r))
-        return
-      }
+      const row = items.find(it => it.type === 'ingredient' && it.key === key) as IngredientItem | undefined
+      if (!row || !row.name || row.ingredientId) { updIng(key, { showSuggestions: false }); return }
       const res = await fetch(`/api/ingredients?q=${encodeURIComponent(row.name)}`)
       const data: IngredientMaster[] = await res.json()
       const exact = data.find(d => d.name === row.name)
-      if (exact) {
-        setIngredients(prev => prev.map(r =>
-          r.key === key ? { ...r, ingredientId: exact.id, unit: exact.unit, pricePerUnit: exact.pricePerUnit, showSuggestions: false } : r
-        ))
-      } else if (row.name) {
-        setIngredients(prev => prev.map(r =>
-          r.key === key ? { ...r, isNew: true, showMasterForm: true, showSuggestions: false } : r
-        ))
-      }
+      if (exact) updIng(key, { ingredientId: exact.id, unit: exact.unit, pricePerUnit: exact.pricePerUnit, showSuggestions: false })
+      else if (row.name) updIng(key, { isNew: true, showMasterForm: true, showSuggestions: false })
     }, 150)
   }
 
@@ -146,27 +147,19 @@ export default function NewRecipePage() {
     setError('')
     if (!name.trim()) { setError('レシピ名を入力してください'); return }
 
-    const filledIngredients = ingredients.filter(r => r.name.trim())
+    const allIngItems = itemsToSubmit(items).filter(r => r.name.trim())
 
-    const newIngs = filledIngredients.filter(r => r.isNew && r.showMasterForm)
+    const newIngs = allIngItems.filter(r => r.isNew && r.showMasterForm)
     for (const ni of newIngs) {
-      if (!ni.newPricePerUnit) {
-        setError(`「${ni.name}」の単価を入力してください`)
-        return
-      }
+      if (!ni.newPricePerUnit) { setError(`「${ni.name}」の単価を入力してください`); return }
       const res = await fetch('/api/ingredients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: ni.name, unit: ni.newUnit || ni.unit, pricePerUnit: parseFloat(ni.newPricePerUnit) }),
       })
       if (res.ok) {
         const created: IngredientMaster = await res.json()
-        setIngredients(prev => prev.map(r =>
-          r.key === ni.key ? { ...r, ingredientId: created.id, unit: created.unit, pricePerUnit: created.pricePerUnit } : r
-        ))
-        filledIngredients.forEach(fi => {
-          if (fi.key === ni.key) { fi.ingredientId = created.id; fi.unit = created.unit; fi.pricePerUnit = created.pricePerUnit }
-        })
+        updIng(ni.key, { ingredientId: created.id, unit: created.unit, pricePerUnit: created.pricePerUnit })
+        allIngItems.forEach(fi => { if (fi.key === ni.key) { fi.ingredientId = created.id; fi.unit = created.unit } })
       }
     }
 
@@ -181,12 +174,13 @@ export default function NewRecipePage() {
           photoPath: photoPath || null,
           referenceUrl: referenceUrl.trim() || null,
           steps: steps.filter(s => s.trim()),
-          ingredients: filledIngredients.map(r => ({
+          ingredients: allIngItems.map(r => ({
             ingredientId: r.ingredientId ?? null,
             customName: !r.ingredientId ? r.name : null,
             amount: parseFloat(r.amount) || 0,
             unit: r.unit,
             manualCost: (!r.ingredientId && r.manualCost) ? parseFloat(r.manualCost) : null,
+            sectionName: r.sectionName ?? null,
           })),
         }),
       })
@@ -204,8 +198,9 @@ export default function NewRecipePage() {
     }
   }
 
-  const totalCost = ingredients.reduce((sum, r) => {
-    const c = calcCost(r)
+  const totalCost = items.reduce((sum, it) => {
+    if (it.type !== 'ingredient') return sum
+    const c = calcCost(it)
     return c != null ? sum + c : sum
   }, 0)
 
@@ -263,27 +258,38 @@ export default function NewRecipePage() {
         {/* 材料 */}
         <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
           <h2 className="text-base font-semibold text-stone-700 mb-4">材料</h2>
-          <div className="space-y-3">
-            {ingredients.map((row, i) => (
-              <div key={row.key} className="space-y-2">
-                {/* 1行目：食材名 ＋ 削除ボタン */}
+          <div className="space-y-2">
+            {items.map((item, i) => item.type === 'section' ? (
+              /* セクションヘッダー */
+              <div key={item.key} className="flex gap-2 items-center mt-3 first:mt-0">
+                <span className="text-orange-400 text-base">📂</span>
+                <input
+                  type="text" value={item.name}
+                  onChange={e => setItems(prev => prev.map(it => it.key === item.key ? { ...it, name: e.target.value } : it))}
+                  placeholder="セクション名（例: タルト生地、スポンジ）"
+                  className="flex-1 border-b-2 border-orange-300 bg-orange-50 rounded px-2 py-1 text-sm font-semibold text-orange-700 focus:outline-none focus:border-orange-500"
+                />
+                <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
+                  className="text-stone-300 hover:text-red-500 px-1 text-lg">×</button>
+              </div>
+            ) : (
+              /* 材料行 */
+              <div key={item.key} className="space-y-1 pl-4 border-l-2 border-stone-100">
                 <div className="flex gap-2 items-start">
                   <div className="relative flex-1">
                     <input
-                      type="text" value={row.name}
-                      onChange={e => handleIngNameChange(row.key, e.target.value)}
-                      onBlur={() => handleIngBlur(row.key)}
-                      onFocus={() => row.name && searchIngredients(row.name, row.key)}
+                      type="text" value={item.name}
+                      onChange={e => handleIngNameChange(item.key, e.target.value)}
+                      onBlur={() => handleIngBlur(item.key)}
+                      onFocus={() => item.name && searchIngredients(item.name, item.key)}
                       placeholder="食材名"
-                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${row.ingredientId ? 'border-green-400 bg-green-50' : row.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`}
+                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${item.ingredientId ? 'border-green-400 bg-green-50' : item.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`}
                     />
-                    {row.showSuggestions && row.suggestions.length > 0 && (
+                    {item.showSuggestions && item.suggestions.length > 0 && (
                       <div className="absolute z-10 top-full left-0 right-0 bg-white border border-stone-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
-                        {row.suggestions.map(s => (
-                          <button key={s.id} type="button"
-                            onMouseDown={() => handleSelectSuggestion(row.key, s)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between"
-                          >
+                        {item.suggestions.map(s => (
+                          <button key={s.id} type="button" onMouseDown={() => handleSelectSuggestion(item.key, s)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 flex justify-between">
                             <span>{s.name}</span>
                             <span className="text-stone-400 text-xs">¥{s.pricePerUnit}/{s.unit}</span>
                           </button>
@@ -291,68 +297,49 @@ export default function NewRecipePage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIngredients(prev => prev.filter(r => r.key !== row.key))}
-                    disabled={ingredients.length === 1}
-                    className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg disabled:opacity-30"
-                  >×</button>
+                  <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
+                    className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg">×</button>
                 </div>
-                {/* 2行目：量 ＋ 単位 ＋ コスト */}
-                <div className="flex gap-2 items-center pl-1">
-                  <input
-                    type="number" value={row.amount}
-                    onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, amount: e.target.value } : r))}
-                    placeholder="量"
-                    className="w-24 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    step="any" min="0"
-                  />
-                  <span className="text-sm text-stone-500">{row.unit}</span>
+                <div className="flex gap-2 items-center">
+                  <input type="number" value={item.amount}
+                    onChange={e => updIng(item.key, { amount: e.target.value })}
+                    placeholder="量" className="w-24 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    step="any" min="0" />
+                  <span className="text-sm text-stone-500">{item.unit}</span>
                   <span className="flex-1 text-right text-sm font-medium text-orange-600">
-                    {calcCost(row) != null ? `¥${Math.round(calcCost(row)!).toLocaleString()}` : ''}
+                    {calcCost(item) != null ? `¥${Math.round(calcCost(item)!).toLocaleString()}` : ''}
                   </span>
                 </div>
-
-                {row.isNew && !row.ingredientId && (
-                  <div className="ml-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-xs text-orange-700 font-medium mb-2">
-                      「{row.name}」は新しい食材です。単価を入力するとマスタに登録されます。
-                    </p>
+                {item.isNew && !item.ingredientId && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-xs text-orange-700 font-medium mb-2">「{item.name}」は新しい食材です。単価を入力するとマスタに登録されます。</p>
                     <div className="flex gap-2 flex-wrap">
                       <div>
                         <label className="text-xs text-stone-600">単位</label>
-                        <select value={row.newUnit}
-                          onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, newUnit: e.target.value, unit: e.target.value } : r))}
-                          className="mt-0.5 block border border-stone-300 rounded px-2 py-1 text-xs"
-                        >
+                        <select value={item.newUnit} onChange={e => updIng(item.key, { newUnit: e.target.value, unit: e.target.value })}
+                          className="mt-0.5 block border border-stone-300 rounded px-2 py-1 text-xs">
                           {['g', 'ml', '個', '枚', '本', '袋', '缶', '大さじ', '小さじ', 'カップ'].map(u => <option key={u}>{u}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="text-xs text-stone-600">単価 (¥/単位)</label>
-                        <input type="number" value={row.newPricePerUnit} step="0.01" min="0"
-                          onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, newPricePerUnit: e.target.value } : r))}
-                          placeholder="0.00"
-                          className="mt-0.5 block w-24 border border-stone-300 rounded px-2 py-1 text-xs"
-                        />
+                        <input type="number" value={item.newPricePerUnit} step="0.01" min="0"
+                          onChange={e => updIng(item.key, { newPricePerUnit: e.target.value })}
+                          placeholder="0.00" className="mt-0.5 block w-24 border border-stone-300 rounded px-2 py-1 text-xs" />
                       </div>
                       <div>
                         <label className="text-xs text-stone-600">またはこの料理での金額(¥)</label>
-                        <input type="number" value={row.manualCost} step="1" min="0"
-                          onChange={e => setIngredients(prev => prev.map(r => r.key === row.key ? { ...r, manualCost: e.target.value } : r))}
-                          placeholder="手動入力"
-                          className="mt-0.5 block w-24 border border-stone-300 rounded px-2 py-1 text-xs"
-                        />
+                        <input type="number" value={item.manualCost} step="1" min="0"
+                          onChange={e => updIng(item.key, { manualCost: e.target.value })}
+                          placeholder="手動入力" className="mt-0.5 block w-24 border border-stone-300 rounded px-2 py-1 text-xs" />
                       </div>
                     </div>
                   </div>
                 )}
-
-                {row.ingredientId && (
-                  <p className="text-xs text-green-600 ml-2">✓ マスタから取得 (¥{row.pricePerUnit}/{row.unit})</p>
+                {item.ingredientId && (
+                  <p className="text-xs text-green-600">✓ マスタから取得 (¥{item.pricePerUnit}/{item.unit})</p>
                 )}
-
-                {i === ingredients.length - 1 && (
+                {i === items.length - 1 && (
                   <div className="text-right text-sm font-bold text-stone-700 border-t border-stone-100 pt-2">
                     合計金額: ¥{Math.round(totalCost).toLocaleString()}
                   </div>
@@ -360,13 +347,16 @@ export default function NewRecipePage() {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setIngredients(prev => [...prev, newIngRow()])}
-            className="mt-3 text-orange-600 hover:text-orange-700 text-sm font-medium"
-          >
-            + 材料を追加
-          </button>
+          <div className="mt-3 flex gap-3">
+            <button type="button" onClick={() => setItems(prev => [...prev, newIngRow()])}
+              className="text-orange-600 hover:text-orange-700 text-sm font-medium">
+              + 材料を追加
+            </button>
+            <button type="button" onClick={() => setItems(prev => [...prev, newSectionRow()])}
+              className="text-orange-400 hover:text-orange-600 text-sm font-medium">
+              📂 セクションを追加
+            </button>
+          </div>
         </section>
 
         {/* 手順 */}
