@@ -143,13 +143,11 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* ヘッダー */}
-      <div className="flex items-start justify-between">
-        <div>
-          <Link href="/" className="text-sm text-stone-400 hover:text-stone-600 mb-1 inline-block">← 一覧へ戻る</Link>
-          <h1 className="text-2xl font-bold text-stone-800">{recipe.name}</h1>
-          {recipe.description && <p className="text-stone-500 mt-1 text-sm">{recipe.description}</p>}
-        </div>
-        <div className="flex gap-2 flex-shrink-0">
+      <div>
+        <Link href="/" className="text-sm text-stone-400 hover:text-stone-600 mb-2 inline-block">← 一覧へ戻る</Link>
+        <h1 className="text-2xl font-bold text-stone-800">{recipe.name}</h1>
+        {recipe.description && <p className="text-stone-500 mt-1 text-sm">{recipe.description}</p>}
+        <div className="flex gap-2 flex-wrap mt-3">
           <Link
             href={`/recipe/${recipe.id}/edit?versionId=${activeVersion?.id}`}
             className="bg-orange-100 text-orange-700 px-4 py-1.5 rounded-full text-sm font-medium hover:bg-orange-200 transition-colors"
