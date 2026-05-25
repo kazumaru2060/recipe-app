@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -52,11 +52,55 @@ function diffIngredients(oldV: RecipeVersion, newV: RecipeVersion) {
   return changes
 }
 
+function generateShareText(
+  recipe: Recipe,
+  version: RecipeVersion,
+  opts: { hashtags: boolean; cost: boolean }
+): string {
+  const lines: string[] = []
+  lines.push(`【${recipe.name}】`)
+  if (recipe.description) lines.push('', recipe.description)
+
+  lines.push('', '▼材料')
+  let prevSec: string | null | undefined = undefined
+  for (const ri of version.ingredients) {
+    const sec = ri.sectionName ?? null
+    if (sec !== prevSec) {
+      prevSec = sec
+      if (sec) lines.push('', `《${sec}》`)
+    }
+    const name = ri.ingredient?.name ?? ri.customName ?? ''
+    let line = `・${name}　${ri.amount}${ri.unit}`
+    if (opts.cost) {
+      const c = ri.ingredient ? ri.amount * ri.ingredient.pricePerUnit : ri.manualCost
+      if (c != null) line += `（¥${Math.round(c).toLocaleString()}）`
+    }
+    lines.push(line)
+  }
+
+  const steps: string[] = JSON.parse(version.steps)
+  if (steps.length > 0) {
+    lines.push('', '▼作り方')
+    steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`))
+  }
+
+  if (version.notes) lines.push('', `📝 ${version.notes}`)
+  if (opts.hashtags) lines.push('', '#料理 #レシピ #手作り #cooking #homecooking')
+
+  return lines.join('\n')
+}
+
 export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
   const router = useRouter()
   const [activeVersionIndex, setActiveVersionIndex] = useState(recipe.versions.length - 1)
   const [showHistory, setShowHistory] = useState(false)
   const [compareIndex, setCompareIndex] = useState<number | null>(null)
+  const [showShare, setShowShare] = useState(false)
+  const [shareHashtags, setShareHashtags] = useState(true)
+  const [shareCost, setShareCost] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [canShare, setCanShare] = useState(false)
+  useEffect(() => { setCanShare(!!navigator.share) }, [])
 
   const activeVersion = recipe.versions[activeVersionIndex]
   const steps: string[] = activeVersion ? JSON.parse(activeVersion.steps) : []
@@ -66,6 +110,22 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
     if (!confirm('このレシピを削除しますか？')) return
     await fetch(`/api/recipes/${recipe.id}`, { method: 'DELETE' })
     router.push('/')
+  }
+
+  const shareText = showShare
+    ? generateShareText(recipe, activeVersion, { hashtags: shareHashtags, cost: shareCost })
+    : ''
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(shareText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
+
+  const handleNativeShare = async () => {
+    try {
+      await navigator.share({ title: recipe.name, text: shareText })
+    } catch { /* user cancelled */ }
   }
 
   const handleSetCoverPhoto = async (photoPath: string) => {
@@ -102,6 +162,12 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
           >
             改善版を追加
           </Link>
+          <button
+            onClick={() => setShowShare(true)}
+            className="bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-sm font-medium hover:bg-green-200 transition-colors"
+          >
+            📤 シェア
+          </button>
           <button
             onClick={handleDelete}
             className="bg-stone-100 text-stone-500 px-3 py-1.5 rounded-full text-sm hover:bg-red-100 hover:text-red-600 transition-colors"
@@ -298,6 +364,63 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
       <p className="text-xs text-stone-400 text-center">
         登録日: {new Date(recipe.createdAt).toLocaleDateString('ja-JP')}
       </p>
+
+      {/* シェアモーダル */}
+      {showShare && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+              <h2 className="text-base font-semibold text-stone-800">📤 シェア用テキスト</h2>
+              <button onClick={() => setShowShare(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+            </div>
+
+            {/* オプション */}
+            <div className="flex gap-5 px-5 py-3 bg-stone-50 border-b border-stone-100">
+              <label className="flex items-center gap-2 text-sm text-stone-600 cursor-pointer select-none">
+                <input type="checkbox" checked={shareHashtags} onChange={e => setShareHashtags(e.target.checked)} className="accent-orange-500" />
+                ハッシュタグを含める
+              </label>
+              <label className="flex items-center gap-2 text-sm text-stone-600 cursor-pointer select-none">
+                <input type="checkbox" checked={shareCost} onChange={e => setShareCost(e.target.checked)} className="accent-orange-500" />
+                コストを含める
+              </label>
+            </div>
+
+            {/* テキストプレビュー */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <textarea
+                value={shareText}
+                readOnly
+                className="w-full h-64 border border-stone-200 rounded-xl p-3 text-sm text-stone-700 bg-stone-50 resize-none focus:outline-none leading-relaxed"
+              />
+              <p className="mt-2 text-xs text-stone-400">
+                テキストをコピーして Instagram・X・LINE などに貼り付けてください
+              </p>
+            </div>
+
+            {/* アクションボタン */}
+            <div className="px-5 py-4 border-t border-stone-100 flex gap-3">
+              <button
+                onClick={handleCopy}
+                className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-colors ${
+                  copied ? 'bg-green-500 text-white' : 'bg-orange-500 text-white hover:bg-orange-600'
+                }`}
+              >
+                {copied ? '✓ コピーしました！' : '📋 テキストをコピー'}
+              </button>
+              {canShare && (
+                <button
+                  onClick={handleNativeShare}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-blue-600 transition-colors"
+                >
+                  📤 アプリで共有
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
