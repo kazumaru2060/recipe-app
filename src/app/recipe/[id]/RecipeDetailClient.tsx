@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
-  tbspGrams: number | null; tspGrams: number | null
+  tbspGrams: number | null; tspGrams: number | null; gramsPerUnit: number | null
   kcal: number | null; protein: number | null; fat: number | null
   carbs: number | null; fiber: number | null; calcium: number | null
   iron: number | null; vitA: number | null; vitB1: number | null
@@ -35,15 +35,23 @@ interface NutritionTotals {
   vitC: number; vitD: number; vitE: number; salt: number
 }
 
-// 1食材の使用量あたりのグラム数を計算（g単位の食材のみ）
+// 使用量をグラムに換算して返す（栄養計算用）
 function toGrams(ri: RecipeIngredient): number | null {
   const ing = ri.ingredient
   if (!ing) return null
+
+  // g/ml 直接指定
   if (ing.unit === 'g' || ing.unit === 'ml') {
     if (ri.unit === ing.unit) return ri.amount
     if (ri.unit === '大さじ' && ing.tbspGrams != null) return ri.amount * ing.tbspGrams
     if (ri.unit === '小さじ' && ing.tspGrams != null) return ri.amount * ing.tspGrams
   }
+
+  // 個・本・枚などの個数単位 → gramsPerUnit で換算
+  if (ing.gramsPerUnit != null && ri.unit === ing.unit) {
+    return ri.amount * ing.gramsPerUnit
+  }
+
   return null
 }
 

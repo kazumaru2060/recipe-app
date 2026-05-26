@@ -20,12 +20,14 @@ export async function PUT(
   const { name, unit, pricePerUnit, tspGrams } = body
 
   const tsp = tspGrams != null ? parseFloat(tspGrams) : null
+  const gpu = body.gramsPerUnit != null && body.gramsPerUnit !== '' ? parseFloat(body.gramsPerUnit as string) : null
   const ingredient = await prisma.ingredient.update({
     where: { id: parseInt(id) },
     data: {
       name, unit, pricePerUnit: parseFloat(pricePerUnit),
       tspGrams: tsp,
       tbspGrams: tsp != null ? tsp * 3 : null,
+      gramsPerUnit: gpu,
       ...parseNutrition(body),
     },
   })

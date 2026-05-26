@@ -37,11 +37,13 @@ export async function POST(request: NextRequest) {
   }
 
   const tsp = tspGrams != null ? parseFloat(tspGrams) : null
+  const gpu = body.gramsPerUnit != null && body.gramsPerUnit !== '' ? parseFloat(body.gramsPerUnit as string) : null
   const ingredient = await prisma.ingredient.create({
     data: {
       name, unit, pricePerUnit: parseFloat(pricePerUnit),
       tspGrams: tsp,
       tbspGrams: tsp != null ? tsp * 3 : null,
+      gramsPerUnit: gpu,
       ...parseNutrition(body),
     },
   })

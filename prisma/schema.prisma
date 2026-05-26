@@ -14,6 +14,7 @@ model Ingredient {
   pricePerUnit Float
   tbspGrams    Float?
   tspGrams     Float?
+  gramsPerUnit Float?   // 1個/1本あたりのg数（個・本・枚などの単位用）
   // 栄養素（100gあたり）
   kcal         Float?   // エネルギー (kcal)
   protein      Float?   // たんぱく質 (g)

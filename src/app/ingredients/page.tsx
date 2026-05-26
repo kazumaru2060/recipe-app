@@ -9,6 +9,7 @@ interface Ingredient {
   pricePerUnit: number
   tbspGrams: number | null
   tspGrams: number | null
+  gramsPerUnit: number | null
   kcal: number | null; protein: number | null; fat: number | null
   carbs: number | null; fiber: number | null; calcium: number | null
   iron: number | null; vitA: number | null; vitB1: number | null
@@ -56,7 +57,7 @@ export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
+  const [form, setForm] = useState({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '', gramsPerUnit: '' })
   const [nutrition, setNutrition] = useState<NutritionForm>(emptyNutrition())
   const [showNutrition, setShowNutrition] = useState(false)
   const [error, setError] = useState('')
@@ -126,6 +127,7 @@ export default function IngredientsPage() {
       unit: form.unit,
       pricePerUnit: parseFloat(form.pricePerUnit),
       tspGrams: tsp,
+      gramsPerUnit: form.gramsPerUnit ? parseFloat(form.gramsPerUnit) : null,
       // 栄養素
       ...Object.fromEntries(
         NUTRITION_FIELDS.map(f => [f.key, nutrition[f.key] !== '' ? parseFloat(nutrition[f.key]) : null])
@@ -147,7 +149,7 @@ export default function IngredientsPage() {
       return
     }
 
-    setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
+    setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '', gramsPerUnit: '' })
     setNutrition(emptyNutrition())
     setNutQuery('')
     setShowNutrition(false)
@@ -162,6 +164,7 @@ export default function IngredientsPage() {
       unit: ing.unit,
       pricePerUnit: String(ing.pricePerUnit),
       tspGrams: ing.tspGrams != null ? String(ing.tspGrams) : '',
+      gramsPerUnit: ing.gramsPerUnit != null ? String(ing.gramsPerUnit) : '',
     })
     const nut = emptyNutrition()
     for (const f of NUTRITION_FIELDS) {
@@ -185,6 +188,7 @@ export default function IngredientsPage() {
   }
 
   const showConversionFields = WEIGHT_UNITS.includes(form.unit)
+  const showGramsPerUnit = !WEIGHT_UNITS.includes(form.unit) && form.unit !== '' && !['大さじ', '小さじ', 'カップ'].includes(form.unit)
 
   return (
     <div>
@@ -193,7 +197,7 @@ export default function IngredientsPage() {
         <button
           onClick={() => {
             setShowForm(true); setEditId(null)
-            setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
+            setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '', gramsPerUnit: '' })
             setNutrition(emptyNutrition()); setNutQuery(''); setShowNutrition(false)
             setError('')
           }}
@@ -277,6 +281,31 @@ export default function IngredientsPage() {
                       → 大さじ1 = {(parseFloat(form.tspGrams) * 3).toFixed(1)}{form.unit}（自動計算）
                     </p>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* 1単位あたりのグラム数（個・本・枚などの単位用） */}
+            {showGramsPerUnit && (
+              <div className="mt-5 border-t border-stone-100 pt-4">
+                <p className="text-sm font-semibold text-stone-700 mb-1">
+                  重量換算（任意）
+                </p>
+                <p className="text-xs text-stone-400 mb-3">
+                  1{form.unit || '単位'}あたりのグラム数を入力すると、栄養素計算が行えます。
+                  （例: 卵1個 = 60g、にんじん1本 = 100g）
+                </p>
+                <div className="max-w-xs">
+                  <label className="block text-sm font-medium text-stone-700 mb-1">
+                    1{form.unit || '単位'} = 何g？
+                  </label>
+                  <input
+                    type="number" value={form.gramsPerUnit}
+                    onChange={e => setForm(f => ({ ...f, gramsPerUnit: e.target.value }))}
+                    placeholder="例: 卵→60、にんじん→100"
+                    step="1" min="0"
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
                 </div>
               </div>
             )}
@@ -399,6 +428,11 @@ export default function IngredientsPage() {
                           小さじ1={ing.tspGrams}{ing.unit}、大さじ1={ing.tspGrams * 3}{ing.unit}
                         </div>
                       )}
+                      {ing.gramsPerUnit != null && (
+                        <div className="sm:hidden mt-0.5 text-xs text-stone-400">
+                          1{ing.unit}={ing.gramsPerUnit}g
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-stone-400 text-xs hidden sm:table-cell">
                       {ing.tspGrams != null ? (
@@ -407,6 +441,10 @@ export default function IngredientsPage() {
                           <span>大さじ1={ing.tspGrams * 3}{ing.unit}</span>
                         </>
                       ) : WEIGHT_UNITS.includes(ing.unit) ? (
+                        <span className="text-stone-300">未設定</span>
+                      ) : ing.gramsPerUnit != null ? (
+                        <span>1{ing.unit}={ing.gramsPerUnit}g</span>
+                      ) : !['大さじ', '小さじ', 'カップ'].includes(ing.unit) ? (
                         <span className="text-stone-300">未設定</span>
                       ) : null}
                     </td>
