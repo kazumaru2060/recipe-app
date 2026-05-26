@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
+  tbspGrams: number | null; tspGrams: number | null
 }
 interface RecipeIngredient {
   id: number; ingredientId: number | null; customName: string | null
@@ -23,11 +24,23 @@ interface Recipe {
   referenceUrl: string | null; createdAt: string; versions: RecipeVersion[]
 }
 
+function calcIngCost(ri: RecipeIngredient): number | null {
+  if (ri.ingredient) {
+    const ing = ri.ingredient
+    if (ri.unit === ing.unit) return ri.amount * ing.pricePerUnit
+    if (ing.unit === 'g' || ing.unit === 'ml') {
+      if (ri.unit === '大さじ' && ing.tbspGrams != null) return ri.amount * ing.tbspGrams * ing.pricePerUnit
+      if (ri.unit === '小さじ' && ing.tspGrams != null) return ri.amount * ing.tspGrams * ing.pricePerUnit
+    }
+    return null
+  }
+  return ri.manualCost ?? null
+}
+
 function calcVersionCost(version: RecipeVersion): number {
   return version.ingredients.reduce((sum, ri) => {
-    if (ri.ingredient) return sum + ri.amount * ri.ingredient.pricePerUnit
-    if (ri.manualCost != null) return sum + ri.manualCost
-    return sum
+    const c = calcIngCost(ri)
+    return c != null ? sum + c : sum
   }, 0)
 }
 
@@ -322,7 +335,7 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
                     )
                   }
                 }
-                const c = ri.ingredient ? ri.amount * ri.ingredient.pricePerUnit : ri.manualCost
+                const c = calcIngCost(ri)
                 rows.push(
                   <tr key={ri.id} className="border-b border-stone-50">
                     <td className={`py-2 font-medium text-stone-800${sec ? ' pl-3' : ''}`}>

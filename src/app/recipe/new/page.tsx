@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -9,6 +9,8 @@ interface IngredientMaster {
   name: string
   unit: string
   pricePerUnit: number
+  tbspGrams: number | null
+  tspGrams: number | null
 }
 
 interface SectionItem {
@@ -22,9 +24,12 @@ interface IngredientItem {
   key: string
   name: string
   ingredientId?: number
-  unit: string
+  masterUnit: string      // マスタの単位（換算基準）
+  unit: string            // このレシピで使う単位
   amount: string
   pricePerUnit?: number
+  tbspGrams: number | null
+  tspGrams: number | null
   manualCost: string
   isNew: boolean
   newUnit: string
@@ -36,10 +41,28 @@ interface IngredientItem {
 
 type ListItem = SectionItem | IngredientItem
 
+// g/ml単位の食材で大さじ・小さじ選択肢を出す
+const CONVERTIBLE_UNITS = ['g', 'ml']
+
+function unitOptions(row: IngredientItem): string[] {
+  if (!row.ingredientId) return ['g', 'ml', '個', '枚', '本', '袋', '缶', '大さじ', '小さじ', 'カップ']
+  if (CONVERTIBLE_UNITS.includes(row.masterUnit)) {
+    return [row.masterUnit, '大さじ', '小さじ']
+  }
+  return [row.masterUnit]
+}
+
 function calcCost(row: IngredientItem): number | null {
   const amount = parseFloat(row.amount)
   if (isNaN(amount)) return null
-  if (row.ingredientId && row.pricePerUnit != null) return amount * row.pricePerUnit
+  if (row.ingredientId && row.pricePerUnit != null) {
+    if (row.unit === row.masterUnit) return amount * row.pricePerUnit
+    if (CONVERTIBLE_UNITS.includes(row.masterUnit)) {
+      if (row.unit === '大さじ' && row.tbspGrams != null) return amount * row.tbspGrams * row.pricePerUnit
+      if (row.unit === '小さじ' && row.tspGrams != null) return amount * row.tspGrams * row.pricePerUnit
+    }
+    return null
+  }
   if (!row.ingredientId) {
     const mc = parseFloat(row.manualCost)
     if (!isNaN(mc)) return mc
@@ -47,7 +70,24 @@ function calcCost(row: IngredientItem): number | null {
   return null
 }
 
-// items配列を材料送信データに変換（セクション名を各材料に付与）
+function newIngRow(): IngredientItem {
+  return {
+    type: 'ingredient',
+    key: Math.random().toString(36).slice(2),
+    name: '', ingredientId: undefined,
+    masterUnit: 'g', unit: 'g',
+    amount: '', pricePerUnit: undefined,
+    tbspGrams: null, tspGrams: null,
+    manualCost: '', isNew: false,
+    newUnit: 'g', newPricePerUnit: '', showMasterForm: false,
+    suggestions: [], showSuggestions: false,
+  }
+}
+
+function newSectionRow(): SectionItem {
+  return { type: 'section', key: Math.random().toString(36).slice(2), name: '' }
+}
+
 function itemsToSubmit(items: ListItem[]) {
   let currentSection: string | null = null
   return items.flatMap(item => {
@@ -70,21 +110,6 @@ export default function NewRecipePage() {
   const [error, setError] = useState('')
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function newIngRow(): IngredientItem {
-    return {
-      type: 'ingredient',
-      key: Math.random().toString(36).slice(2),
-      name: '', ingredientId: undefined, unit: 'g', amount: '',
-      pricePerUnit: undefined, manualCost: '', isNew: false,
-      newUnit: 'g', newPricePerUnit: '', showMasterForm: false,
-      suggestions: [], showSuggestions: false,
-    }
-  }
-
-  function newSectionRow(): SectionItem {
-    return { type: 'section', key: Math.random().toString(36).slice(2), name: '' }
-  }
-
   const updIng = (key: string, patch: Partial<IngredientItem>) =>
     setItems(prev => prev.map(it => it.type === 'ingredient' && it.key === key ? { ...it, ...patch } : it))
 
@@ -96,13 +121,19 @@ export default function NewRecipePage() {
   }
 
   const handleIngNameChange = (key: string, value: string) => {
-    updIng(key, { name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false, showMasterForm: false })
+    updIng(key, { name: value, ingredientId: undefined, pricePerUnit: undefined, isNew: false, showMasterForm: false, tbspGrams: null, tspGrams: null })
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => searchIngredients(value, key), 200)
   }
 
   const handleSelectSuggestion = (key: string, ing: IngredientMaster) => {
-    updIng(key, { name: ing.name, ingredientId: ing.id, unit: ing.unit, pricePerUnit: ing.pricePerUnit, isNew: false, showMasterForm: false, showSuggestions: false, suggestions: [] })
+    updIng(key, {
+      name: ing.name, ingredientId: ing.id,
+      masterUnit: ing.unit, unit: ing.unit,
+      pricePerUnit: ing.pricePerUnit,
+      tbspGrams: ing.tbspGrams, tspGrams: ing.tspGrams,
+      isNew: false, showMasterForm: false, showSuggestions: false, suggestions: [],
+    })
   }
 
   const handleIngBlur = async (key: string) => {
@@ -112,8 +143,14 @@ export default function NewRecipePage() {
       const res = await fetch(`/api/ingredients?q=${encodeURIComponent(row.name)}`)
       const data: IngredientMaster[] = await res.json()
       const exact = data.find(d => d.name === row.name)
-      if (exact) updIng(key, { ingredientId: exact.id, unit: exact.unit, pricePerUnit: exact.pricePerUnit, showSuggestions: false })
-      else if (row.name) updIng(key, { isNew: true, showMasterForm: true, showSuggestions: false })
+      if (exact) {
+        updIng(key, {
+          ingredientId: exact.id, masterUnit: exact.unit, unit: exact.unit,
+          pricePerUnit: exact.pricePerUnit,
+          tbspGrams: exact.tbspGrams, tspGrams: exact.tspGrams,
+          showSuggestions: false,
+        })
+      } else if (row.name) updIng(key, { isNew: true, showMasterForm: true, showSuggestions: false })
     }, 150)
   }
 
@@ -128,11 +165,7 @@ export default function NewRecipePage() {
       fd.append('file', file)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
       const data = await res.json()
-      if (!res.ok || !data.path) {
-        setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`)
-        setPhotoPreview('')
-        return
-      }
+      if (!res.ok || !data.path) { setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`); setPhotoPreview(''); return }
       setPhotoPath(data.path)
     } catch {
       setError('写真のアップロードに失敗しました。通信状況を確認してください。')
@@ -158,7 +191,7 @@ export default function NewRecipePage() {
       })
       if (res.ok) {
         const created: IngredientMaster = await res.json()
-        updIng(ni.key, { ingredientId: created.id, unit: created.unit, pricePerUnit: created.pricePerUnit })
+        updIng(ni.key, { ingredientId: created.id, masterUnit: created.unit, unit: created.unit, pricePerUnit: created.pricePerUnit })
         allIngItems.forEach(fi => { if (fi.key === ni.key) { fi.ingredientId = created.id; fi.unit = created.unit } })
       }
     }
@@ -184,13 +217,7 @@ export default function NewRecipePage() {
           })),
         }),
       })
-
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error ?? '保存に失敗しました')
-        return
-      }
-
+      if (!res.ok) { const data = await res.json(); setError(data.error ?? '保存に失敗しました'); return }
       const recipe = await res.json()
       router.push(`/recipe/${recipe.id}`)
     } finally {
@@ -215,37 +242,24 @@ export default function NewRecipePage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">料理名 *</label>
-              <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder="例: 唐揚げ"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例: 唐揚げ"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">メモ・説明</label>
-              <textarea
-                value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="料理の特徴やポイントなど"
-                rows={2}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-              />
+              <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="料理の特徴やポイントなど" rows={2}
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">参考URL</label>
-              <input
-                type="url" value={referenceUrl} onChange={e => setReferenceUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-              />
+              <input type="url" value={referenceUrl} onChange={e => setReferenceUrl(e.target.value)} placeholder="https://..."
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">料理の写真</label>
               <input type="file" accept="image/*" onChange={handlePhotoChange}
-                className="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-              />
-              {uploading && (
-                <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>
-              )}
+                className="w-full text-sm text-stone-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100" />
+              {uploading && <p className="mt-2 text-sm text-orange-500">📤 写真をアップロード中...</p>}
               {photoPreview && !uploading && (
                 <div className="mt-2 relative w-32 h-32 rounded-lg overflow-hidden">
                   <Image src={photoPreview} alt="プレビュー" fill className="object-cover" />
@@ -259,32 +273,27 @@ export default function NewRecipePage() {
         <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
           <h2 className="text-base font-semibold text-stone-700 mb-4">材料</h2>
           <div className="space-y-2">
-            {items.map((item, i) => item.type === 'section' ? (
-              /* セクションヘッダー */
+            {items.map((item) => item.type === 'section' ? (
               <div key={item.key} className="flex gap-2 items-center mt-3 first:mt-0">
                 <span className="text-orange-400 text-base">📂</span>
-                <input
-                  type="text" value={item.name}
+                <input type="text" value={item.name}
                   onChange={e => setItems(prev => prev.map(it => it.key === item.key ? { ...it, name: e.target.value } : it))}
                   placeholder="セクション名（例: タルト生地、スポンジ）"
-                  className="flex-1 border-b-2 border-orange-300 bg-orange-50 rounded px-2 py-1 text-sm font-semibold text-orange-700 focus:outline-none focus:border-orange-500"
-                />
+                  className="flex-1 border-b-2 border-orange-300 bg-orange-50 rounded px-2 py-1 text-sm font-semibold text-orange-700 focus:outline-none focus:border-orange-500" />
                 <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
                   className="text-stone-300 hover:text-red-500 px-1 text-lg">×</button>
               </div>
             ) : (
-              /* 材料行 */
               <div key={item.key} className="space-y-1 pl-4 border-l-2 border-stone-100">
+                {/* 1行目: 食材名 */}
                 <div className="flex gap-2 items-start">
                   <div className="relative flex-1">
-                    <input
-                      type="text" value={item.name}
+                    <input type="text" value={item.name}
                       onChange={e => handleIngNameChange(item.key, e.target.value)}
                       onBlur={() => handleIngBlur(item.key)}
                       onFocus={() => item.name && searchIngredients(item.name, item.key)}
                       placeholder="食材名"
-                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${item.ingredientId ? 'border-green-400 bg-green-50' : item.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`}
-                    />
+                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${item.ingredientId ? 'border-green-400 bg-green-50' : item.isNew ? 'border-orange-300 bg-orange-50' : 'border-stone-300'}`} />
                     {item.showSuggestions && item.suggestions.length > 0 && (
                       <div className="absolute z-10 top-full left-0 right-0 bg-white border border-stone-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
                         {item.suggestions.map(s => (
@@ -300,16 +309,41 @@ export default function NewRecipePage() {
                   <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
                     className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg">×</button>
                 </div>
+                {/* 2行目: 量 + 単位セレクタ + コスト */}
                 <div className="flex gap-2 items-center">
                   <input type="number" value={item.amount}
                     onChange={e => updIng(item.key, { amount: e.target.value })}
                     placeholder="量" className="w-24 border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
                     step="any" min="0" />
-                  <span className="text-sm text-stone-500">{item.unit}</span>
+                  {unitOptions(item).length > 1 ? (
+                    <select value={item.unit} onChange={e => updIng(item.key, { unit: e.target.value })}
+                      className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                      {unitOptions(item).map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-sm text-stone-500">{item.unit}</span>
+                  )}
                   <span className="flex-1 text-right text-sm font-medium text-orange-600">
                     {calcCost(item) != null ? `¥${Math.round(calcCost(item)!).toLocaleString()}` : ''}
                   </span>
                 </div>
+                {/* 換算データ未登録の警告 */}
+                {item.ingredientId && CONVERTIBLE_UNITS.includes(item.masterUnit) &&
+                  ((item.unit === '大さじ' && item.tbspGrams == null) ||
+                   (item.unit === '小さじ' && item.tspGrams == null)) && (
+                  <p className="text-xs text-amber-600 ml-1">
+                    ⚠ 食材マスタに換算データが未登録のためコスト計算できません
+                  </p>
+                )}
+                {/* マスタ情報 */}
+                {item.ingredientId && (
+                  <p className="text-xs text-green-600">
+                    ✓ マスタから取得 (¥{item.pricePerUnit}/{item.masterUnit}
+                    {item.tbspGrams != null && `、大さじ1=${item.tbspGrams}${item.masterUnit}`}
+                    {item.tspGrams != null && `、小さじ1=${item.tspGrams}${item.masterUnit}`})
+                  </p>
+                )}
+                {/* 新規食材登録フォーム */}
                 {item.isNew && !item.ingredientId && (
                   <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
                     <p className="text-xs text-orange-700 font-medium mb-2">「{item.name}」は新しい食材です。単価を入力するとマスタに登録されます。</p>
@@ -336,26 +370,15 @@ export default function NewRecipePage() {
                     </div>
                   </div>
                 )}
-                {item.ingredientId && (
-                  <p className="text-xs text-green-600">✓ マスタから取得 (¥{item.pricePerUnit}/{item.unit})</p>
-                )}
-                {i === items.length - 1 && (
-                  <div className="text-right text-sm font-bold text-stone-700 border-t border-stone-100 pt-2">
-                    合計金額: ¥{Math.round(totalCost).toLocaleString()}
-                  </div>
-                )}
               </div>
             ))}
           </div>
-          <div className="mt-3 flex gap-3">
+          <div className="mt-3 flex gap-3 items-center">
             <button type="button" onClick={() => setItems(prev => [...prev, newIngRow()])}
-              className="text-orange-600 hover:text-orange-700 text-sm font-medium">
-              + 材料を追加
-            </button>
+              className="text-orange-600 hover:text-orange-700 text-sm font-medium">+ 材料を追加</button>
             <button type="button" onClick={() => setItems(prev => [...prev, newSectionRow()])}
-              className="text-orange-400 hover:text-orange-600 text-sm font-medium">
-              📂 セクションを追加
-            </button>
+              className="text-orange-400 hover:text-orange-600 text-sm font-medium">📂 セクションを追加</button>
+            <span className="ml-auto text-sm font-bold text-stone-700">合計: ¥{Math.round(totalCost).toLocaleString()}</span>
           </div>
         </section>
 
@@ -366,45 +389,27 @@ export default function NewRecipePage() {
             {steps.map((step, i) => (
               <div key={i} className="flex gap-2 items-start">
                 <span className="text-sm font-bold text-orange-500 w-6 pt-2 shrink-0">{i + 1}</span>
-                <textarea
-                  value={step}
-                  onChange={e => setSteps(prev => prev.map((s, j) => j === i ? e.target.value : s))}
-                  placeholder={`手順${i + 1}`}
-                  rows={2}
-                  className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))}
-                  disabled={steps.length === 1}
-                  className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg disabled:opacity-30"
-                >×</button>
+                <textarea value={step} onChange={e => setSteps(prev => prev.map((s, j) => j === i ? e.target.value : s))}
+                  placeholder={`手順${i + 1}`} rows={2}
+                  className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+                <button type="button" onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))}
+                  disabled={steps.length === 1} className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg disabled:opacity-30">×</button>
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setSteps(prev => [...prev, ''])}
-            className="mt-3 text-orange-600 hover:text-orange-700 text-sm font-medium"
-          >
-            + 手順を追加
-          </button>
+          <button type="button" onClick={() => setSteps(prev => [...prev, ''])}
+            className="mt-3 text-orange-600 hover:text-orange-700 text-sm font-medium">+ 手順を追加</button>
         </section>
 
         {error && <p className="text-red-500 text-sm bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
         <div className="flex gap-3">
-          <button
-            type="submit" disabled={saving || uploading}
-            className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-60 transition-colors"
-          >
+          <button type="submit" disabled={saving || uploading}
+            className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-60 transition-colors">
             {saving ? '保存中...' : uploading ? '写真アップロード中...' : 'レシピを保存'}
           </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="bg-stone-100 text-stone-700 px-6 py-3 rounded-xl font-medium hover:bg-stone-200 transition-colors"
-          >
+          <button type="button" onClick={() => router.back()}
+            className="bg-stone-100 text-stone-700 px-6 py-3 rounded-xl font-medium hover:bg-stone-200 transition-colors">
             キャンセル
           </button>
         </div>

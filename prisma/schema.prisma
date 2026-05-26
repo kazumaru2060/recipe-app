@@ -12,6 +12,8 @@ model Ingredient {
   name         String   @unique
   unit         String
   pricePerUnit Float
+  tbspGrams    Float?
+  tspGrams     Float?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

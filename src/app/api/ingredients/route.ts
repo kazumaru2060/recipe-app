@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { name, unit, pricePerUnit } = body
+  const { name, unit, pricePerUnit, tbspGrams, tspGrams } = body
 
   if (!name || !unit || pricePerUnit == null) {
     return Response.json({ error: '名前、単位、単価は必須です' }, { status: 400 })
@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
   }
 
   const ingredient = await prisma.ingredient.create({
-    data: { name, unit, pricePerUnit: parseFloat(pricePerUnit) },
+    data: {
+      name, unit, pricePerUnit: parseFloat(pricePerUnit),
+      tbspGrams: tbspGrams != null ? parseFloat(tbspGrams) : null,
+      tspGrams: tspGrams != null ? parseFloat(tspGrams) : null,
+    },
   })
 
   return Response.json(ingredient, { status: 201 })
