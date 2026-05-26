@@ -1,6 +1,16 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest } from 'next/server'
 
+function parseNutrition(body: Record<string, unknown>) {
+  const n = (k: string) => body[k] != null && body[k] !== '' ? parseFloat(body[k] as string) : null
+  return {
+    kcal: n('kcal'), protein: n('protein'), fat: n('fat'), carbs: n('carbs'),
+    fiber: n('fiber'), calcium: n('calcium'), iron: n('iron'),
+    vitA: n('vitA'), vitB1: n('vitB1'), vitB2: n('vitB2'),
+    vitC: n('vitC'), vitD: n('vitD'), vitE: n('vitE'), salt: n('salt'),
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,6 +26,7 @@ export async function PUT(
       name, unit, pricePerUnit: parseFloat(pricePerUnit),
       tspGrams: tsp,
       tbspGrams: tsp != null ? tsp * 3 : null,
+      ...parseNutrition(body),
     },
   })
 

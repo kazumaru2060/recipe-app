@@ -8,6 +8,11 @@ import { useRouter } from 'next/navigation'
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
   tbspGrams: number | null; tspGrams: number | null
+  kcal: number | null; protein: number | null; fat: number | null
+  carbs: number | null; fiber: number | null; calcium: number | null
+  iron: number | null; vitA: number | null; vitB1: number | null
+  vitB2: number | null; vitC: number | null; vitD: number | null
+  vitE: number | null; salt: number | null
 }
 interface RecipeIngredient {
   id: number; ingredientId: number | null; customName: string | null
@@ -22,6 +27,55 @@ interface RecipeVersion {
 interface Recipe {
   id: number; name: string; description: string | null; photoPath: string | null
   referenceUrl: string | null; createdAt: string; versions: RecipeVersion[]
+}
+
+interface NutritionTotals {
+  kcal: number; protein: number; fat: number; carbs: number; fiber: number
+  calcium: number; iron: number; vitA: number; vitB1: number; vitB2: number
+  vitC: number; vitD: number; vitE: number; salt: number
+}
+
+// 1食材の使用量あたりのグラム数を計算（g単位の食材のみ）
+function toGrams(ri: RecipeIngredient): number | null {
+  const ing = ri.ingredient
+  if (!ing) return null
+  if (ing.unit === 'g' || ing.unit === 'ml') {
+    if (ri.unit === ing.unit) return ri.amount
+    if (ri.unit === '大さじ' && ing.tbspGrams != null) return ri.amount * ing.tbspGrams
+    if (ri.unit === '小さじ' && ing.tspGrams != null) return ri.amount * ing.tspGrams
+  }
+  return null
+}
+
+function calcNutrition(version: RecipeVersion): NutritionTotals | null {
+  const totals: NutritionTotals = {
+    kcal: 0, protein: 0, fat: 0, carbs: 0, fiber: 0,
+    calcium: 0, iron: 0, vitA: 0, vitB1: 0, vitB2: 0,
+    vitC: 0, vitD: 0, vitE: 0, salt: 0,
+  }
+  let hasAny = false
+
+  for (const ri of version.ingredients) {
+    const grams = toGrams(ri)
+    if (grams == null || !ri.ingredient) continue
+    const ing = ri.ingredient
+    const factor = grams / 100
+
+    const keys: (keyof NutritionTotals)[] = [
+      'kcal', 'protein', 'fat', 'carbs', 'fiber',
+      'calcium', 'iron', 'vitA', 'vitB1', 'vitB2',
+      'vitC', 'vitD', 'vitE', 'salt',
+    ]
+    for (const k of keys) {
+      const v = ing[k]
+      if (v != null) {
+        totals[k] += v * factor
+        hasAny = true
+      }
+    }
+  }
+
+  return hasAny ? totals : null
 }
 
 function calcIngCost(ri: RecipeIngredient): number | null {
@@ -103,6 +157,27 @@ function generateShareText(
   return lines.join('\n')
 }
 
+const NUTRITION_DISPLAY = [
+  { key: 'kcal' as const,    label: 'エネルギー', unit: 'kcal', color: 'text-orange-600' },
+  { key: 'protein' as const, label: 'たんぱく質', unit: 'g',    color: 'text-blue-600' },
+  { key: 'fat' as const,     label: '脂質',       unit: 'g',    color: 'text-yellow-600' },
+  { key: 'carbs' as const,   label: '炭水化物',   unit: 'g',    color: 'text-green-600' },
+  { key: 'fiber' as const,   label: '食物繊維',   unit: 'g',    color: 'text-teal-600' },
+  { key: 'salt' as const,    label: '食塩相当量', unit: 'g',    color: 'text-red-500' },
+  { key: 'calcium' as const, label: 'Ca',         unit: 'mg',   color: 'text-stone-600' },
+  { key: 'iron' as const,    label: '鉄',         unit: 'mg',   color: 'text-stone-600' },
+  { key: 'vitA' as const,    label: 'A',          unit: 'μg',   color: 'text-stone-600' },
+  { key: 'vitB1' as const,   label: 'B1',         unit: 'mg',   color: 'text-stone-600' },
+  { key: 'vitB2' as const,   label: 'B2',         unit: 'mg',   color: 'text-stone-600' },
+  { key: 'vitC' as const,    label: 'C',          unit: 'mg',   color: 'text-stone-600' },
+  { key: 'vitD' as const,    label: 'D',          unit: 'μg',   color: 'text-stone-600' },
+  { key: 'vitE' as const,    label: 'E',          unit: 'mg',   color: 'text-stone-600' },
+]
+
+function fmt(v: number, decimals = 1) {
+  return v < 1 ? v.toFixed(2) : v.toFixed(decimals)
+}
+
 export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
   const router = useRouter()
   const [activeVersionIndex, setActiveVersionIndex] = useState(recipe.versions.length - 1)
@@ -113,11 +188,14 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
   const [shareCost, setShareCost] = useState(false)
   const [copied, setCopied] = useState(false)
   const [canShare, setCanShare] = useState(false)
+  const [showNutrition, setShowNutrition] = useState(false)
+  const [servings, setServings] = useState(1)
   useEffect(() => { setCanShare(!!navigator.share) }, [])
 
   const activeVersion = recipe.versions[activeVersionIndex]
   const steps: string[] = activeVersion ? JSON.parse(activeVersion.steps) : []
   const cost = activeVersion ? calcVersionCost(activeVersion) : 0
+  const nutrition = activeVersion ? calcNutrition(activeVersion) : null
 
   const handleDelete = async () => {
     if (!confirm('このレシピを削除しますか？')) return
@@ -272,7 +350,6 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
               className="object-cover"
             />
           </div>
-          {/* バージョン固有の写真がある場合、ホーム設定ボタンを表示 */}
           {activeVersion?.photoPath && activeVersion.photoPath !== recipe.photoPath && (
             <button
               onClick={() => handleSetCoverPhoto(activeVersion.photoPath!)}
@@ -355,6 +432,86 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
         </table>
       </div>
 
+      {/* 栄養素パネル */}
+      {nutrition && (
+        <div className="bg-white rounded-xl shadow-sm border border-stone-100 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowNutrition(v => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-stone-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold text-stone-700">🥗 栄養素</span>
+              <span className="text-xs text-stone-400">（食材マスタに栄養素を登録した食材のみ集計）</span>
+            </div>
+            <span className={`text-stone-400 transition-transform ${showNutrition ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+
+          {showNutrition && (
+            <div className="px-6 pb-5 border-t border-stone-100">
+              {/* 人数設定 */}
+              <div className="flex items-center gap-3 mt-4 mb-4">
+                <span className="text-sm text-stone-600">人数:</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setServings(s => Math.max(1, s - 1))}
+                    className="w-7 h-7 rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200 flex items-center justify-center text-sm font-bold"
+                  >−</button>
+                  <span className="text-sm font-semibold text-stone-800 w-6 text-center">{servings}</span>
+                  <button
+                    onClick={() => setServings(s => Math.min(20, s + 1))}
+                    className="w-7 h-7 rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200 flex items-center justify-center text-sm font-bold"
+                  >+</button>
+                </div>
+                <span className="text-xs text-stone-400">
+                  {servings > 1 ? `1人あたり` : `全量`}の栄養素を表示
+                </span>
+              </div>
+
+              {/* 主要栄養素（大きく表示） */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+                {NUTRITION_DISPLAY.slice(0, 6).map(n => {
+                  const v = nutrition[n.key] / servings
+                  return (
+                    <div key={n.key} className="bg-stone-50 rounded-xl p-3 text-center">
+                      <p className={`text-lg font-bold ${n.color}`}>
+                        {fmt(v, n.key === 'kcal' ? 0 : 1)}
+                      </p>
+                      <p className="text-xs text-stone-500 mt-0.5">{n.unit}</p>
+                      <p className="text-xs text-stone-600 font-medium">{n.label}</p>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* ミネラル・ビタミン（小さく表示） */}
+              <div className="border-t border-stone-100 pt-3">
+                <p className="text-xs font-semibold text-stone-500 mb-2">ミネラル・ビタミン</p>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                  {NUTRITION_DISPLAY.slice(6).map(n => {
+                    const v = nutrition[n.key] / servings
+                    return (
+                      <div key={n.key} className="bg-stone-50 rounded-lg p-2 text-center">
+                        <p className="text-sm font-bold text-stone-700">
+                          {fmt(v)}
+                        </p>
+                        <p className="text-xs text-stone-400">{n.unit}</p>
+                        <p className="text-xs text-stone-500">Vit{n.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-stone-400">
+                ※ 栄養素が未設定の食材・手動入力食材は集計から除外されています。
+                食材マスタで栄養素を設定するとより正確な値になります。
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 作り方 */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
         <h2 className="text-base font-semibold text-stone-700 mb-4">作り方</h2>
@@ -380,13 +537,10 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
       {showShare && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
-            {/* ヘッダー */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
               <h2 className="text-base font-semibold text-stone-800">📤 シェア用テキスト</h2>
               <button onClick={() => setShowShare(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
             </div>
-
-            {/* オプション */}
             <div className="flex gap-5 px-5 py-3 bg-stone-50 border-b border-stone-100">
               <label className="flex items-center gap-2 text-sm text-stone-600 cursor-pointer select-none">
                 <input type="checkbox" checked={shareHashtags} onChange={e => setShareHashtags(e.target.checked)} className="accent-orange-500" />
@@ -397,8 +551,6 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
                 コストを含める
               </label>
             </div>
-
-            {/* テキストプレビュー */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <textarea
                 value={shareText}
@@ -409,8 +561,6 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
                 テキストをコピーして Instagram・X・LINE などに貼り付けてください
               </p>
             </div>
-
-            {/* アクションボタン */}
             <div className="px-5 py-4 border-t border-stone-100 flex gap-3">
               <button
                 onClick={handleCopy}
