@@ -18,7 +18,7 @@ export default function IngredientsPage() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState({ name: '', unit: 'g', pricePerUnit: '', tbspGrams: '', tspGrams: '' })
+  const [form, setForm] = useState({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
   const [error, setError] = useState('')
 
   const fetchIngredients = useCallback(async () => {
@@ -42,7 +42,6 @@ export default function IngredientsPage() {
       name: form.name,
       unit: form.unit,
       pricePerUnit: parseFloat(form.pricePerUnit),
-      tbspGrams: form.tbspGrams ? parseFloat(form.tbspGrams) : null,
       tspGrams: form.tspGrams ? parseFloat(form.tspGrams) : null,
     }
 
@@ -61,7 +60,7 @@ export default function IngredientsPage() {
       return
     }
 
-    setForm({ name: '', unit: 'g', pricePerUnit: '', tbspGrams: '', tspGrams: '' })
+    setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
     setEditId(null)
     setShowForm(false)
     fetchIngredients()
@@ -72,7 +71,6 @@ export default function IngredientsPage() {
       name: ing.name,
       unit: ing.unit,
       pricePerUnit: String(ing.pricePerUnit),
-      tbspGrams: ing.tbspGrams != null ? String(ing.tbspGrams) : '',
       tspGrams: ing.tspGrams != null ? String(ing.tspGrams) : '',
     })
     setEditId(ing.id)
@@ -96,7 +94,7 @@ export default function IngredientsPage() {
         <button
           onClick={() => {
             setShowForm(true); setEditId(null)
-            setForm({ name: '', unit: 'g', pricePerUnit: '', tbspGrams: '', tspGrams: '' })
+            setForm({ name: '', unit: 'g', pricePerUnit: '', tspGrams: '' })
             setError('')
           }}
           className="bg-orange-500 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-orange-600 transition-colors"
@@ -157,40 +155,31 @@ export default function IngredientsPage() {
               </div>
             </div>
 
-            {/* 大さじ・小さじ換算（g/mlのときのみ表示） */}
+            {/* 小さじ換算（g/mlのときのみ表示） */}
             {showConversionFields && (
               <div className="mt-5 border-t border-stone-100 pt-4">
                 <p className="text-sm font-semibold text-stone-700 mb-1">
-                  大さじ・小さじ換算（任意）
+                  小さじ換算（任意）
                 </p>
                 <p className="text-xs text-stone-400 mb-3">
-                  入力しておくと、レシピ登録時に大さじ・小さじでコスト計算できます
+                  小さじ1の重さを入力すると、大さじ・小さじでコスト計算できます。大さじは自動的に小さじ×3で計算されます。
                 </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">
-                      大さじ1 = 何{form.unit}？
-                    </label>
-                    <input
-                      type="number" value={form.tbspGrams}
-                      onChange={e => setForm(f => ({ ...f, tbspGrams: e.target.value }))}
-                      placeholder={form.unit === 'g' ? '例: 薄力粉9、砂糖12、塩18' : '例: 15'}
-                      step="0.1" min="0"
-                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">
-                      小さじ1 = 何{form.unit}？
-                    </label>
-                    <input
-                      type="number" value={form.tspGrams}
-                      onChange={e => setForm(f => ({ ...f, tspGrams: e.target.value }))}
-                      placeholder={form.unit === 'g' ? '例: 薄力粉3、砂糖4、塩6' : '例: 5'}
-                      step="0.1" min="0"
-                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
-                  </div>
+                <div className="max-w-xs">
+                  <label className="block text-sm font-medium text-stone-700 mb-1">
+                    小さじ1 = 何{form.unit}？
+                  </label>
+                  <input
+                    type="number" value={form.tspGrams}
+                    onChange={e => setForm(f => ({ ...f, tspGrams: e.target.value }))}
+                    placeholder={form.unit === 'g' ? '例: 薄力粉3、砂糖4、塩6' : '例: 5'}
+                    step="0.1" min="0"
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  {form.tspGrams && (
+                    <p className="mt-1 text-xs text-stone-400">
+                      → 大さじ1 = {(parseFloat(form.tspGrams) * 3).toFixed(1)}{form.unit}（自動計算）
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -234,19 +223,21 @@ export default function IngredientsPage() {
                   <td className="px-4 py-3 text-stone-600">
                     ¥{ing.pricePerUnit.toLocaleString(undefined, { maximumFractionDigits: 4 })} / {ing.unit}
                     {/* スマホでは換算をここに表示 */}
-                    {(ing.tbspGrams != null || ing.tspGrams != null) && (
+                    {ing.tspGrams != null && (
                       <div className="sm:hidden mt-0.5 text-xs text-stone-400">
-                        {ing.tbspGrams != null && <span className="mr-2">大さじ1={ing.tbspGrams}{ing.unit}</span>}
-                        {ing.tspGrams != null && <span>小さじ1={ing.tspGrams}{ing.unit}</span>}
+                        小さじ1={ing.tspGrams}{ing.unit}、大さじ1={ing.tspGrams * 3}{ing.unit}
                       </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-stone-400 text-xs hidden sm:table-cell">
-                    {ing.tbspGrams != null && <span className="mr-3">大さじ1={ing.tbspGrams}{ing.unit}</span>}
-                    {ing.tspGrams != null && <span>小さじ1={ing.tspGrams}{ing.unit}</span>}
-                    {ing.tbspGrams == null && ing.tspGrams == null && WEIGHT_UNITS.includes(ing.unit) && (
+                    {ing.tspGrams != null ? (
+                      <>
+                        <span className="mr-3">小さじ1={ing.tspGrams}{ing.unit}</span>
+                        <span>大さじ1={ing.tspGrams * 3}{ing.unit}</span>
+                      </>
+                    ) : WEIGHT_UNITS.includes(ing.unit) ? (
                       <span className="text-stone-300">未設定</span>
-                    )}
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => handleEdit(ing)}
