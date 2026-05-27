@@ -165,25 +165,47 @@ function generateShareText(
   return lines.join('\n')
 }
 
+// 1日の栄養素等表示基準値（食品表示法 別表第12 / 日本人の食事摂取基準2020年版）
+const DAILY_VALUES: Record<keyof NutritionTotals, number> = {
+  kcal:    2200,   // kcal
+  protein:   81,   // g
+  fat:       62,   // g
+  carbs:    320,   // g
+  fiber:     21,   // g
+  calcium:  800,   // mg
+  iron:      10,   // mg
+  vitA:     770,   // μg RAE
+  vitB1:    1.3,   // mg
+  vitB2:    1.5,   // mg
+  vitC:     100,   // mg
+  vitD:     8.5,   // μg
+  vitE:     7.0,   // mg αトコフェロール
+  salt:     7.5,   // g（目標量。少ないほど良い）
+}
+
 const NUTRITION_DISPLAY = [
-  { key: 'kcal' as const,    label: 'エネルギー', unit: 'kcal', color: 'text-orange-600' },
-  { key: 'protein' as const, label: 'たんぱく質', unit: 'g',    color: 'text-blue-600' },
-  { key: 'fat' as const,     label: '脂質',       unit: 'g',    color: 'text-yellow-600' },
-  { key: 'carbs' as const,   label: '炭水化物',   unit: 'g',    color: 'text-green-600' },
-  { key: 'fiber' as const,   label: '食物繊維',   unit: 'g',    color: 'text-teal-600' },
-  { key: 'salt' as const,    label: '食塩相当量', unit: 'g',    color: 'text-red-500' },
-  { key: 'calcium' as const, label: 'Ca',         unit: 'mg',   color: 'text-stone-600' },
-  { key: 'iron' as const,    label: '鉄',         unit: 'mg',   color: 'text-stone-600' },
-  { key: 'vitA' as const,    label: 'A',          unit: 'μg',   color: 'text-stone-600' },
-  { key: 'vitB1' as const,   label: 'B1',         unit: 'mg',   color: 'text-stone-600' },
-  { key: 'vitB2' as const,   label: 'B2',         unit: 'mg',   color: 'text-stone-600' },
-  { key: 'vitC' as const,    label: 'C',          unit: 'mg',   color: 'text-stone-600' },
-  { key: 'vitD' as const,    label: 'D',          unit: 'μg',   color: 'text-stone-600' },
-  { key: 'vitE' as const,    label: 'E',          unit: 'mg',   color: 'text-stone-600' },
+  { key: 'kcal' as const,    label: 'エネルギー', unit: 'kcal', color: 'text-orange-600',  bar: 'bg-orange-400',  limitWarn: false },
+  { key: 'protein' as const, label: 'たんぱく質', unit: 'g',    color: 'text-blue-600',    bar: 'bg-blue-400',    limitWarn: false },
+  { key: 'fat' as const,     label: '脂質',       unit: 'g',    color: 'text-yellow-600',  bar: 'bg-yellow-400',  limitWarn: false },
+  { key: 'carbs' as const,   label: '炭水化物',   unit: 'g',    color: 'text-green-600',   bar: 'bg-green-400',   limitWarn: false },
+  { key: 'fiber' as const,   label: '食物繊維',   unit: 'g',    color: 'text-teal-600',    bar: 'bg-teal-400',    limitWarn: false },
+  { key: 'salt' as const,    label: '食塩相当量', unit: 'g',    color: 'text-red-500',     bar: 'bg-red-400',     limitWarn: true  },
+  { key: 'calcium' as const, label: 'Ca',         unit: 'mg',   color: 'text-stone-600',   bar: 'bg-stone-400',   limitWarn: false },
+  { key: 'iron' as const,    label: '鉄',         unit: 'mg',   color: 'text-stone-600',   bar: 'bg-stone-400',   limitWarn: false },
+  { key: 'vitA' as const,    label: 'Vit A',      unit: 'μg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
+  { key: 'vitB1' as const,   label: 'Vit B1',     unit: 'mg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
+  { key: 'vitB2' as const,   label: 'Vit B2',     unit: 'mg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
+  { key: 'vitC' as const,    label: 'Vit C',      unit: 'mg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
+  { key: 'vitD' as const,    label: 'Vit D',      unit: 'μg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
+  { key: 'vitE' as const,    label: 'Vit E',      unit: 'mg',   color: 'text-stone-600',   bar: 'bg-amber-300',   limitWarn: false },
 ]
 
 function fmt(v: number, decimals = 1) {
   return v < 1 ? v.toFixed(2) : v.toFixed(decimals)
+}
+
+function pct(value: number, key: keyof NutritionTotals): number {
+  return Math.min(Math.round((value / DAILY_VALUES[key]) * 100), 999)
 }
 
 export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
@@ -458,7 +480,7 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
           {showNutrition && (
             <div className="px-6 pb-5 border-t border-stone-100">
               {/* 人数設定 */}
-              <div className="flex items-center gap-3 mt-4 mb-4">
+              <div className="flex items-center gap-3 mt-4 mb-5">
                 <span className="text-sm text-stone-600">人数:</span>
                 <div className="flex items-center gap-2">
                   <button
@@ -472,48 +494,78 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
                   >+</button>
                 </div>
                 <span className="text-xs text-stone-400">
-                  {servings > 1 ? `1人あたり` : `全量`}の栄養素を表示
+                  {servings > 1 ? '1人あたりの栄養素を表示' : '全量の栄養素を表示'}
                 </span>
               </div>
 
-              {/* 主要栄養素（大きく表示） */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+              {/* 主要6栄養素 — 値＋バー＋% */}
+              <div className="space-y-2.5 mb-5">
                 {NUTRITION_DISPLAY.slice(0, 6).map(n => {
                   const v = nutrition[n.key] / servings
+                  const p = pct(v, n.key)
+                  const barWidth = Math.min(p, 100)
+                  const isWarn = n.limitWarn && p >= 50
+                  const isOver = p > 100
                   return (
-                    <div key={n.key} className="bg-stone-50 rounded-xl p-3 text-center">
-                      <p className={`text-lg font-bold ${n.color}`}>
-                        {fmt(v, n.key === 'kcal' ? 0 : 1)}
-                      </p>
-                      <p className="text-xs text-stone-500 mt-0.5">{n.unit}</p>
-                      <p className="text-xs text-stone-600 font-medium">{n.label}</p>
+                    <div key={n.key}>
+                      <div className="flex items-baseline justify-between mb-1">
+                        <span className={`text-sm font-medium ${n.color}`}>{n.label}</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-bold text-stone-800">
+                            {fmt(v, n.key === 'kcal' ? 0 : 1)}<span className="text-xs font-normal text-stone-400 ml-0.5">{n.unit}</span>
+                          </span>
+                          <span className={`text-xs font-semibold tabular-nums w-14 text-right ${
+                            isOver ? 'text-red-600' : isWarn ? 'text-orange-500' : 'text-stone-500'
+                          }`}>
+                            {n.limitWarn ? '目標の' : '推奨の'}{p}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            isOver ? 'bg-red-400' : isWarn ? 'bg-orange-400' : n.bar
+                          }`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
                     </div>
                   )
                 })}
               </div>
 
-              {/* ミネラル・ビタミン（小さく表示） */}
-              <div className="border-t border-stone-100 pt-3">
-                <p className="text-xs font-semibold text-stone-500 mb-2">ミネラル・ビタミン</p>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+              {/* ミネラル・ビタミン — コンパクトグリッド */}
+              <div className="border-t border-stone-100 pt-4">
+                <p className="text-xs font-semibold text-stone-500 mb-3">ミネラル・ビタミン</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {NUTRITION_DISPLAY.slice(6).map(n => {
                     const v = nutrition[n.key] / servings
+                    const p = pct(v, n.key)
+                    const barWidth = Math.min(p, 100)
                     return (
-                      <div key={n.key} className="bg-stone-50 rounded-lg p-2 text-center">
-                        <p className="text-sm font-bold text-stone-700">
-                          {fmt(v)}
+                      <div key={n.key} className="bg-stone-50 rounded-lg px-3 py-2">
+                        <div className="flex items-baseline justify-between mb-1">
+                          <span className="text-xs font-medium text-stone-600">{n.label}</span>
+                          <span className="text-xs font-semibold text-stone-500 tabular-nums">{p}%</span>
+                        </div>
+                        <div className="h-1.5 bg-stone-200 rounded-full overflow-hidden mb-1">
+                          <div
+                            className={`h-full rounded-full ${p > 100 ? 'bg-red-400' : n.bar}`}
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-stone-500 tabular-nums">
+                          {fmt(v)}<span className="text-stone-400 ml-0.5">{n.unit}</span>
                         </p>
-                        <p className="text-xs text-stone-400">{n.unit}</p>
-                        <p className="text-xs text-stone-500">Vit{n.label}</p>
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              <p className="mt-3 text-xs text-stone-400">
-                ※ 栄養素が未設定の食材・手動入力食材は集計から除外されています。
-                食材マスタで栄養素を設定するとより正確な値になります。
+              <p className="mt-4 text-xs text-stone-400 leading-relaxed">
+                ※ %は食品表示法の栄養素等表示基準値（2200kcal基準）に対する割合。食塩のみ目標量（7.5g）に対する割合。
+                栄養素未設定の食材・手動入力食材は集計除外。
               </p>
             </div>
           )}
