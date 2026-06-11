@@ -82,6 +82,9 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
   const versionId = searchParams.get('versionId')
 
   const [items, setItems] = useState<ListItem[]>([newIngRow()])
+  const CATEGORIES = ['通常料理', 'スイーツ'] as const
+  type Category = typeof CATEGORIES[number]
+
   const [loading, setLoading] = useState(true)
   const [editingVersionNumber, setEditingVersionNumber] = useState<number | null>(null)
   const [versionPhotoPath, setVersionPhotoPath] = useState('')
@@ -90,6 +93,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
+  const [category, setCategory] = useState<Category>('通常料理')
   const [photoPath, setPhotoPath] = useState('')
   const [photoPreview, setPhotoPreview] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
@@ -105,6 +109,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
         setName(recipe.name)
         setDescription(recipe.description ?? '')
         setReferenceUrl(recipe.referenceUrl ?? '')
+        setCategory((recipe.category as Category) ?? '通常料理')
         setPhotoPath(recipe.photoPath ?? '')
         if (recipe.photoPath) setPhotoPreview(recipe.photoPath)
         const targetVersion = versionId
@@ -210,6 +215,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
         body: JSON.stringify({
           name: name.trim(), description: description.trim() || null,
           photoPath: photoPath || null, referenceUrl: referenceUrl.trim() || null,
+          category,
           versionId, versionPhotoPath: versionPhotoPath || null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
@@ -248,6 +254,21 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
               <label className="block text-sm font-medium text-stone-700 mb-1">料理名 *</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例: 唐揚げ"
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">カテゴリ</label>
+              <div className="flex gap-2">
+                {CATEGORIES.map(c => (
+                  <button key={c} type="button" onClick={() => setCategory(c)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      category === c
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-stone-600 border-stone-300 hover:border-orange-400'
+                    }`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">メモ・説明</label>

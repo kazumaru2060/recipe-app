@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { name, description, photoPath, referenceUrl, ingredients, steps } = body
+  const { name, description, photoPath, referenceUrl, category, ingredients, steps } = body
 
   if (!name) {
     return Response.json({ error: 'レシピ名は必須です' }, { status: 400 })
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       description: description ?? null,
       photoPath: photoPath ?? null,
       referenceUrl: referenceUrl ?? null,
+      category: category ?? '通常料理',
       versions: {
         create: {
           versionNumber: 1,

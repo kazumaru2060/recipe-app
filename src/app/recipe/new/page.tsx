@@ -96,11 +96,15 @@ function itemsToSubmit(items: ListItem[]) {
   })
 }
 
+const CATEGORIES = ['通常料理', 'スイーツ'] as const
+type Category = typeof CATEGORIES[number]
+
 export default function NewRecipePage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
+  const [category, setCategory] = useState<Category>('通常料理')
   const [photoPath, setPhotoPath] = useState('')
   const [photoPreview, setPhotoPreview] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
@@ -206,6 +210,7 @@ export default function NewRecipePage() {
           description: description.trim() || null,
           photoPath: photoPath || null,
           referenceUrl: referenceUrl.trim() || null,
+          category,
           steps: steps.filter(s => s.trim()),
           ingredients: allIngItems.map(r => ({
             ingredientId: r.ingredientId ?? null,
@@ -244,6 +249,21 @@ export default function NewRecipePage() {
               <label className="block text-sm font-medium text-stone-700 mb-1">料理名 *</label>
               <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="例: 唐揚げ"
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">カテゴリ</label>
+              <div className="flex gap-2">
+                {CATEGORIES.map(c => (
+                  <button key={c} type="button" onClick={() => setCategory(c)}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                      category === c
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-stone-600 border-stone-300 hover:border-orange-400'
+                    }`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">メモ・説明</label>

@@ -10,7 +10,7 @@ interface Ingredient {
 }
 interface RecipeIngredient {
   id: number; ingredientId: number | null; amount: number; unit: string
-  manualCost: number | null; ingredient: Ingredient | null
+  manualCost: number | null; customName: string | null; ingredient: Ingredient | null
 }
 interface RecipeVersion {
   id: number; versionNumber: number
@@ -18,8 +18,11 @@ interface RecipeVersion {
 }
 interface Recipe {
   id: number; name: string; description: string | null
-  photoPath: string | null; versions: RecipeVersion[]
+  photoPath: string | null; category: string; versions: RecipeVersion[]
 }
+
+const CATEGORIES = ['すべて', '通常料理', 'スイーツ'] as const
+type CategoryTab = typeof CATEGORIES[number]
 
 function getLatestCost(recipe: Recipe): number | null {
   const latest = recipe.versions[0]
@@ -41,15 +44,37 @@ function getLatestCost(recipe: Recipe): number | null {
   return total
 }
 
+function recipeMatchesQuery(recipe: Recipe, q: string): boolean {
+  const lower = q.toLowerCase()
+  if (recipe.name.toLowerCase().includes(lower)) return true
+  if ((recipe.description ?? '').toLowerCase().includes(lower)) return true
+  const latest = recipe.versions[0]
+  if (latest) {
+    for (const ri of latest.ingredients) {
+      const ingName = ri.ingredient?.name ?? ri.customName ?? ''
+      if (ingName.toLowerCase().includes(lower)) return true
+    }
+  }
+  return false
+}
+
 export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
   const [query, setQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState<CategoryTab>('すべて')
 
-  const filtered = query.trim()
-    ? recipes.filter(r =>
-        r.name.toLowerCase().includes(query.toLowerCase()) ||
-        (r.description ?? '').toLowerCase().includes(query.toLowerCase())
-      )
-    : recipes
+  const trimmedQuery = query.trim()
+
+  const filtered = recipes.filter(r => {
+    const categoryMatch = activeCategory === 'すべて' || r.category === activeCategory
+    const queryMatch = !trimmedQuery || recipeMatchesQuery(r, trimmedQuery)
+    return categoryMatch && queryMatch
+  })
+
+  const counts: Record<CategoryTab, number> = {
+    すべて: recipes.length,
+    通常料理: recipes.filter(r => r.category === '通常料理').length,
+    スイーツ: recipes.filter(r => r.category === 'スイーツ').length,
+  }
 
   return (
     <div>
@@ -64,30 +89,52 @@ export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
         </Link>
       </div>
 
-      {/* 検索バー */}
       {recipes.length > 0 && (
-        <div className="relative mb-6">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-base pointer-events-none">🔍</span>
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="料理名で検索..."
-            className="w-full pl-9 pr-10 py-2.5 border border-stone-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-lg leading-none"
-            >
-              ×
-            </button>
-          )}
-        </div>
+        <>
+          {/* カテゴリタブ */}
+          <div className="flex gap-2 mb-4">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  activeCategory === cat
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                {cat}
+                <span className={`ml-1.5 text-xs ${activeCategory === cat ? 'text-orange-100' : 'text-stone-400'}`}>
+                  {counts[cat]}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* 検索バー */}
+          <div className="relative mb-5">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-base pointer-events-none">🔍</span>
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="料理名・食材名で検索..."
+              className="w-full pl-9 pr-10 py-2.5 border border-stone-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </>
       )}
 
       {/* 件数表示 */}
-      {query.trim() && (
+      {trimmedQuery && (
         <p className="text-sm text-stone-500 mb-4">
           「{query}」の検索結果：{filtered.length}件
         </p>
@@ -103,10 +150,23 @@ export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-stone-400">
           <p className="text-4xl mb-3">🔍</p>
-          <p className="text-base">「{query}」に一致するレシピは見つかりませんでした</p>
-          <button onClick={() => setQuery('')} className="mt-3 text-sm text-orange-500 hover:text-orange-700">
-            検索をクリア
-          </button>
+          <p className="text-base">
+            {trimmedQuery
+              ? `「${query}」に一致するレシピは見つかりませんでした`
+              : `${activeCategory}のレシピはまだありません`}
+          </p>
+          <div className="flex gap-3 justify-center mt-3">
+            {trimmedQuery && (
+              <button onClick={() => setQuery('')} className="text-sm text-orange-500 hover:text-orange-700">
+                検索をクリア
+              </button>
+            )}
+            {activeCategory !== 'すべて' && (
+              <button onClick={() => setActiveCategory('すべて')} className="text-sm text-orange-500 hover:text-orange-700">
+                すべてを表示
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -120,7 +180,14 @@ export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
                     {recipe.photoPath ? (
                       <Image src={recipe.photoPath} alt={recipe.name} fill className="object-cover" />
                     ) : (
-                      <div className="flex items-center justify-center h-full text-4xl text-stone-300">🍳</div>
+                      <div className="flex items-center justify-center h-full text-4xl text-stone-300">
+                        {recipe.category === 'スイーツ' ? '🍰' : '🍳'}
+                      </div>
+                    )}
+                    {recipe.category === 'スイーツ' && (
+                      <span className="absolute top-1.5 left-1.5 bg-pink-500 text-white text-xs font-medium px-1.5 py-0.5 rounded-full leading-none py-1">
+                        🍰 スイーツ
+                      </span>
                     )}
                   </div>
                   <div className="p-3">

@@ -30,7 +30,7 @@ export async function PUT(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { name, description, photoPath, referenceUrl, steps, ingredients, versionId, versionPhotoPath } = body
+  const { name, description, photoPath, referenceUrl, category, steps, ingredients, versionId, versionPhotoPath } = body
 
   const recipeId = parseInt(id)
 
@@ -42,6 +42,7 @@ export async function PUT(
       description: description ?? null,
       photoPath: photoPath ?? null,
       referenceUrl: referenceUrl ?? null,
+      ...(category !== undefined && { category }),
     },
   })
 
