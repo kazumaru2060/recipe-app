@@ -18,7 +18,7 @@ interface RecipeVersion {
 }
 interface Recipe {
   id: number; name: string; description: string | null
-  photoPath: string | null; category: string; versions: RecipeVersion[]
+  photoPath: string | null; category: string | null; versions: RecipeVersion[]
 }
 
 const CATEGORIES = ['すべて', '通常料理', 'スイーツ'] as const
@@ -64,16 +64,18 @@ export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
 
   const trimmedQuery = query.trim()
 
+  const getCategory = (r: Recipe) => r.category ?? '通常料理'
+
   const filtered = recipes.filter(r => {
-    const categoryMatch = activeCategory === 'すべて' || r.category === activeCategory
+    const categoryMatch = activeCategory === 'すべて' || getCategory(r) === activeCategory
     const queryMatch = !trimmedQuery || recipeMatchesQuery(r, trimmedQuery)
     return categoryMatch && queryMatch
   })
 
   const counts: Record<CategoryTab, number> = {
     すべて: recipes.length,
-    通常料理: recipes.filter(r => r.category === '通常料理').length,
-    スイーツ: recipes.filter(r => r.category === 'スイーツ').length,
+    通常料理: recipes.filter(r => getCategory(r) === '通常料理').length,
+    スイーツ: recipes.filter(r => getCategory(r) === 'スイーツ').length,
   }
 
   return (
@@ -181,11 +183,11 @@ export default function HomeClient({ recipes }: { recipes: Recipe[] }) {
                       <Image src={recipe.photoPath} alt={recipe.name} fill className="object-cover" />
                     ) : (
                       <div className="flex items-center justify-center h-full text-4xl text-stone-300">
-                        {recipe.category === 'スイーツ' ? '🍰' : '🍳'}
+                        {getCategory(recipe) === 'スイーツ' ? '🍰' : '🍳'}
                       </div>
                     )}
-                    {recipe.category === 'スイーツ' && (
-                      <span className="absolute top-1.5 left-1.5 bg-pink-500 text-white text-xs font-medium px-1.5 py-0.5 rounded-full leading-none py-1">
+                    {getCategory(recipe) === 'スイーツ' && (
+                      <span className="absolute top-1.5 left-1.5 bg-pink-500 text-white text-xs font-medium px-1.5 rounded-full leading-5">
                         🍰 スイーツ
                       </span>
                     )}
