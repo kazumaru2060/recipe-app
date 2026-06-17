@@ -21,7 +21,7 @@ type ListItem = SectionItem | IngredientItem
 
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string
-  servings: number | null; servingsUnit: string | null
+  servings: number | null; servingsUnit: string | null; referenceUrl: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ingredients: any[]
 }
@@ -75,6 +75,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
   const router = useRouter()
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [notes, setNotes] = useState('')
+  const [referenceUrl, setReferenceUrl] = useState('')
   const [servingsCount, setServingsCount] = useState('')
   const [servingsUnit, setServingsUnit] = useState<string>('人分')
   const [steps, setSteps] = useState<string[]>([''])
@@ -93,6 +94,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         setRecipe(data)
         const latest = data.versions[data.versions.length - 1]
         if (latest) {
+          setReferenceUrl(latest.referenceUrl ?? '')
           if (latest.servings != null) { setServingsCount(String(latest.servings)); setServingsUnit(latest.servingsUnit ?? '人分') }
           const existingSteps: string[] = JSON.parse(latest.steps)
           setSteps(existingSteps.length > 0 ? existingSteps : [''])
@@ -174,6 +176,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notes: notes.trim(), photoPath: photoPath || null,
+          referenceUrl: referenceUrl.trim() || null,
           servings: servingsCount ? parseInt(servingsCount) : null,
           servingsUnit: servingsCount ? servingsUnit : null,
           steps: steps.filter(s => s.trim()),
@@ -207,6 +210,12 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
           <textarea value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="例: 薄力粉を100g→110gに増やした。食感がもちもちになった。" rows={3}
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-stone-700 mb-1">参考URL</label>
+            <input type="url" value={referenceUrl} onChange={e => setReferenceUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-stone-700 mb-1">何人分・何個分</label>
             <div className="flex gap-2 items-center">

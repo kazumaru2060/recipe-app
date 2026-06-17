@@ -111,7 +111,6 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
       .then(recipe => {
         setName(recipe.name)
         setDescription(recipe.description ?? '')
-        setReferenceUrl(recipe.referenceUrl ?? '')
         setCategory((recipe.category as Category) ?? '通常料理')
         setPhotoPath(recipe.photoPath ?? '')
         if (recipe.photoPath) setPhotoPreview(recipe.photoPath)
@@ -120,6 +119,8 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
           : recipe.versions[recipe.versions.length - 1]
         if (targetVersion) {
           setEditingVersionNumber(targetVersion.versionNumber)
+          // バージョン固有の参考URLを優先、なければレシピ側にフォールバック
+          setReferenceUrl(targetVersion.referenceUrl ?? recipe.referenceUrl ?? '')
           if (targetVersion.photoPath) { setVersionPhotoPath(targetVersion.photoPath); setVersionPhotoPreview(targetVersion.photoPath) }
           if (targetVersion.servings != null) { setServingsCount(String(targetVersion.servings)); setServingsUnit(targetVersion.servingsUnit ?? '人分') }
           const parsedSteps: string[] = JSON.parse(targetVersion.steps)
@@ -218,10 +219,11 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(), description: description.trim() || null,
-          photoPath: photoPath || null, referenceUrl: referenceUrl.trim() || null,
+          photoPath: photoPath || null,
           category,
           servings: servingsCount ? parseInt(servingsCount) : null,
           servingsUnit: servingsCount ? servingsUnit : null,
+          versionReferenceUrl: referenceUrl.trim() || null,
           versionId, versionPhotoPath: versionPhotoPath || null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({

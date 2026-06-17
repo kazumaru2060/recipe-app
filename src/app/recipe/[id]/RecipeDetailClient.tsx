@@ -22,6 +22,7 @@ interface RecipeIngredient {
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string; createdAt: string
   photoPath: string | null; servings: number | null; servingsUnit: string | null
+  referenceUrl: string | null
   ingredients: RecipeIngredient[]
 }
 interface Recipe {
@@ -401,13 +402,13 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
         </div>
       )}
 
-      {/* 参考URL */}
-      {recipe.referenceUrl && (
+      {/* 参考URL（バージョン固有 → レシピ共通の順で表示） */}
+      {(activeVersion?.referenceUrl || recipe.referenceUrl) && (
         <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm">
           <span className="text-stone-500">参考URL: </span>
-          <a href={recipe.referenceUrl} target="_blank" rel="noopener noreferrer"
+          <a href={(activeVersion?.referenceUrl || recipe.referenceUrl)!} target="_blank" rel="noopener noreferrer"
             className="text-blue-600 hover:text-blue-800 underline break-all">
-            {recipe.referenceUrl}
+            {activeVersion?.referenceUrl || recipe.referenceUrl}
           </a>
         </div>
       )}

@@ -7,7 +7,7 @@ export async function POST(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { notes, ingredients, steps, photoPath, servings, servingsUnit } = body
+  const { notes, ingredients, steps, photoPath, servings, servingsUnit, referenceUrl } = body
 
   const recipeId = parseInt(id)
 
@@ -26,6 +26,7 @@ export async function POST(
       notes: notes ?? null,
       steps: JSON.stringify(steps ?? []),
       photoPath: photoPath ?? null,
+      referenceUrl: referenceUrl ?? null,
       servings: servings != null ? parseInt(servings) : null,
       servingsUnit: servingsUnit ?? null,
       ingredients: {

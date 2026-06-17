@@ -16,13 +16,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { name, description, photoPath, referenceUrl, category, ingredients, steps } = body
+  const { name, description, photoPath, referenceUrl, category, ingredients, steps, servings, servingsUnit } = body
 
   if (!name) {
     return Response.json({ error: 'レシピ名は必須です' }, { status: 400 })
   }
-
-  const { servings, servingsUnit } = body
 
   const recipe = await prisma.recipe.create({
     data: {
@@ -35,6 +33,7 @@ export async function POST(request: NextRequest) {
         create: {
           versionNumber: 1,
           steps: JSON.stringify(steps ?? []),
+          referenceUrl: referenceUrl ?? null,
           servings: servings != null ? parseInt(servings) : null,
           servingsUnit: servingsUnit ?? null,
           ingredients: {

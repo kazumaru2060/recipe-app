@@ -58,6 +58,7 @@ model RecipeVersion {
   photoPath     String?
   servings      Int?
   servingsUnit  String?
+  referenceUrl  String?
   createdAt     DateTime @default(now())
 
   recipe      Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
