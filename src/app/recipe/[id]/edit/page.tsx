@@ -84,6 +84,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
   const [items, setItems] = useState<ListItem[]>([newIngRow()])
   const CATEGORIES = ['通常料理', 'スイーツ'] as const
   type Category = typeof CATEGORIES[number]
+  const SERVINGS_UNITS = ['人分', '個', '枚', '本', '切れ', '台分'] as const
 
   const [loading, setLoading] = useState(true)
   const [editingVersionNumber, setEditingVersionNumber] = useState<number | null>(null)
@@ -94,6 +95,8 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
   const [description, setDescription] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
   const [category, setCategory] = useState<Category>('通常料理')
+  const [servingsCount, setServingsCount] = useState('')
+  const [servingsUnit, setServingsUnit] = useState<string>('人分')
   const [photoPath, setPhotoPath] = useState('')
   const [photoPreview, setPhotoPreview] = useState('')
   const [steps, setSteps] = useState<string[]>([''])
@@ -118,6 +121,7 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
         if (targetVersion) {
           setEditingVersionNumber(targetVersion.versionNumber)
           if (targetVersion.photoPath) { setVersionPhotoPath(targetVersion.photoPath); setVersionPhotoPreview(targetVersion.photoPath) }
+          if (targetVersion.servings != null) { setServingsCount(String(targetVersion.servings)); setServingsUnit(targetVersion.servingsUnit ?? '人分') }
           const parsedSteps: string[] = JSON.parse(targetVersion.steps)
           setSteps(parsedSteps.length > 0 ? parsedSteps : [''])
           setItems(ingredientsToItems(targetVersion.ingredients))
@@ -216,6 +220,8 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
           name: name.trim(), description: description.trim() || null,
           photoPath: photoPath || null, referenceUrl: referenceUrl.trim() || null,
           category,
+          servings: servingsCount ? parseInt(servingsCount) : null,
+          servingsUnit: servingsCount ? servingsUnit : null,
           versionId, versionPhotoPath: versionPhotoPath || null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
@@ -268,6 +274,19 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
                     {c}
                   </button>
                 ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">何人分・何個分</label>
+              <div className="flex gap-2 items-center">
+                <input type="number" value={servingsCount} onChange={e => setServingsCount(e.target.value)}
+                  placeholder="例: 4" min="1" step="1"
+                  className="w-24 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <select value={servingsUnit} onChange={e => setServingsUnit(e.target.value)}
+                  className="border border-stone-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  {SERVINGS_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+                <span className="text-xs text-stone-400">（省略可）</span>
               </div>
             </div>
             <div>

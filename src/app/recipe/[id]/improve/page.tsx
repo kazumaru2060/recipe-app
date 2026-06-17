@@ -21,10 +21,13 @@ type ListItem = SectionItem | IngredientItem
 
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string
+  servings: number | null; servingsUnit: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ingredients: any[]
 }
 interface Recipe { id: number; name: string; versions: RecipeVersion[] }
+
+const SERVINGS_UNITS = ['人分', '個', '枚', '本', '切れ', '台分'] as const
 
 const CONVERTIBLE_UNITS = ['g', 'ml']
 
@@ -72,6 +75,8 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
   const router = useRouter()
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [notes, setNotes] = useState('')
+  const [servingsCount, setServingsCount] = useState('')
+  const [servingsUnit, setServingsUnit] = useState<string>('人分')
   const [steps, setSteps] = useState<string[]>([''])
   const [items, setItems] = useState<ListItem[]>([newIngRow()])
   const [photoPath, setPhotoPath] = useState('')
@@ -88,6 +93,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         setRecipe(data)
         const latest = data.versions[data.versions.length - 1]
         if (latest) {
+          if (latest.servings != null) { setServingsCount(String(latest.servings)); setServingsUnit(latest.servingsUnit ?? '人分') }
           const existingSteps: string[] = JSON.parse(latest.steps)
           setSteps(existingSteps.length > 0 ? existingSteps : [''])
           setItems(ingredientsToItems(latest.ingredients))
@@ -168,6 +174,8 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notes: notes.trim(), photoPath: photoPath || null,
+          servings: servingsCount ? parseInt(servingsCount) : null,
+          servingsUnit: servingsCount ? servingsUnit : null,
           steps: steps.filter(s => s.trim()),
           ingredients: filledIngredients.map(r => ({
             ingredientId: r.ingredientId ?? null,
@@ -199,6 +207,19 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
           <textarea value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="例: 薄力粉を100g→110gに増やした。食感がもちもちになった。" rows={3}
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-stone-700 mb-1">何人分・何個分</label>
+            <div className="flex gap-2 items-center">
+              <input type="number" value={servingsCount} onChange={e => setServingsCount(e.target.value)}
+                placeholder="例: 4" min="1" step="1"
+                className="w-24 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <select value={servingsUnit} onChange={e => setServingsUnit(e.target.value)}
+                className="border border-stone-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                {SERVINGS_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <span className="text-xs text-stone-400">（省略可）</span>
+            </div>
+          </div>
         </section>
 
         <section className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">

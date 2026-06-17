@@ -21,7 +21,7 @@ interface RecipeIngredient {
 }
 interface RecipeVersion {
   id: number; versionNumber: number; notes: string | null; steps: string; createdAt: string
-  photoPath: string | null
+  photoPath: string | null; servings: number | null; servingsUnit: string | null
   ingredients: RecipeIngredient[]
 }
 interface Recipe {
@@ -219,8 +219,12 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
   const [copied, setCopied] = useState(false)
   const [canShare, setCanShare] = useState(false)
   const [showNutrition, setShowNutrition] = useState(false)
-  const [servings, setServings] = useState(1)
+  const [servings, setServings] = useState(recipe.versions[recipe.versions.length - 1]?.servings ?? 1)
   useEffect(() => { setCanShare(!!navigator.share) }, [])
+  useEffect(() => {
+    const v = recipe.versions[activeVersionIndex]
+    if (v?.servings != null) setServings(v.servings)
+  }, [activeVersionIndex, recipe.versions])
 
   const activeVersion = recipe.versions[activeVersionIndex]
   const steps: string[] = activeVersion ? JSON.parse(activeVersion.steps) : []
@@ -411,10 +415,24 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
       {/* 材料 */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-stone-100">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-stone-700">材料</h2>
-          <span className="text-sm font-bold text-orange-600">
-            合計: 約 ¥{Math.round(cost).toLocaleString()}
-          </span>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-stone-700">材料</h2>
+            {activeVersion?.servings != null && (
+              <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">
+                {activeVersion.servings}{activeVersion.servingsUnit ?? '人分'}
+              </span>
+            )}
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-bold text-orange-600">
+              合計: 約 ¥{Math.round(cost).toLocaleString()}
+            </div>
+            {activeVersion?.servings != null && activeVersion.servings > 0 && (
+              <div className="text-xs text-stone-500 mt-0.5">
+                1{activeVersion.servingsUnit ?? '人'}あたり: 約 ¥{Math.round(cost / activeVersion.servings).toLocaleString()}
+              </div>
+            )}
+          </div>
         </div>
         <table className="w-full text-sm">
           <thead>
@@ -481,7 +499,7 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
             <div className="px-6 pb-5 border-t border-stone-100">
               {/* 人数設定 */}
               <div className="flex items-center gap-3 mt-4 mb-5">
-                <span className="text-sm text-stone-600">人数:</span>
+                <span className="text-sm text-stone-600">{activeVersion?.servingsUnit ?? '人数'}:</span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setServings(s => Math.max(1, s - 1))}
@@ -494,7 +512,9 @@ export default function RecipeDetailClient({ recipe }: { recipe: Recipe }) {
                   >+</button>
                 </div>
                 <span className="text-xs text-stone-400">
-                  {servings > 1 ? '1人あたりの栄養素を表示' : '全量の栄養素を表示'}
+                  {servings > 1
+                    ? `1${activeVersion?.servingsUnit ?? '人'}あたりの栄養素を表示`
+                    : '全量の栄養素を表示'}
                 </span>
               </div>
 

@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'レシピ名は必須です' }, { status: 400 })
   }
 
+  const { servings, servingsUnit } = body
+
   const recipe = await prisma.recipe.create({
     data: {
       name,
@@ -33,6 +35,8 @@ export async function POST(request: NextRequest) {
         create: {
           versionNumber: 1,
           steps: JSON.stringify(steps ?? []),
+          servings: servings != null ? parseInt(servings) : null,
+          servingsUnit: servingsUnit ?? null,
           ingredients: {
             create: (ingredients ?? []).map((ing: {
               ingredientId?: number
