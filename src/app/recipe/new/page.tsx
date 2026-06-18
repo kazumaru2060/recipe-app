@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { compressImage } from '@/lib/compress-image'
 
 interface IngredientMaster {
   id: number
@@ -169,8 +170,9 @@ export default function NewRecipePage() {
     setUploading(true)
     setError('')
     try {
+      const compressed = await compressImage(file)
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', compressed)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok || !data.path) { setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`); setPhotoPreview(''); return }

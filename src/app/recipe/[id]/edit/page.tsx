@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import { compressImage } from '@/lib/compress-image'
 
 interface IngredientMaster {
   id: number; name: string; unit: string; pricePerUnit: number
@@ -170,7 +171,8 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
     const file = e.target.files?.[0]; if (!file) return
     setPhotoPreview(URL.createObjectURL(file)); setUploading(true); setError('')
     try {
-      const fd = new FormData(); fd.append('file', file)
+      const compressed = await compressImage(file)
+      const fd = new FormData(); fd.append('file', compressed)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok || !data.path) { setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`); setPhotoPreview(photoPath); return }
@@ -183,7 +185,8 @@ export default function EditRecipePage({ params }: { params: Promise<{ id: strin
     const file = e.target.files?.[0]; if (!file) return
     setVersionPhotoPreview(URL.createObjectURL(file)); setVersionPhotoUploading(true)
     try {
-      const fd = new FormData(); fd.append('file', file)
+      const compressed = await compressImage(file)
+      const fd = new FormData(); fd.append('file', compressed)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok || !data.path) { setError(`写真のアップロードに失敗しました: ${data.error ?? '不明なエラー'}`); setVersionPhotoPreview(versionPhotoPath); return }
