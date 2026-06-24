@@ -48,6 +48,26 @@ function itemsToSubmit(items: ListItem[]) {
   let sec: string | null = null
   return items.flatMap(it => { if (it.type === 'section') { sec = it.name.trim() || null; return [] } return [{ ...it, sectionName: sec }] })
 }
+function moveItemUp(items: ListItem[], key: string): ListItem[] {
+  const idx = items.findIndex(it => it.key === key)
+  if (idx <= 0) return items
+  const next = [...items]
+  ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+  return next
+}
+function moveItemDown(items: ListItem[], key: string): ListItem[] {
+  const idx = items.findIndex(it => it.key === key)
+  if (idx === -1 || idx >= items.length - 1) return items
+  const next = [...items]
+  ;[next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]
+  return next
+}
+function insertIngredientAfter(items: ListItem[], key: string): ListItem[] {
+  const idx = items.findIndex(it => it.key === key)
+  const next = [...items]
+  next.splice(idx === -1 ? next.length : idx + 1, 0, newIngRow())
+  return next
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ingredientsToItems(ings: any[]): ListItem[] {
   const result: ListItem[] = []; let curSec: string | null | undefined = undefined
@@ -250,7 +270,7 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
           <h2 className="text-base font-semibold text-stone-700 mb-2">材料（前バージョンから編集できます）</h2>
           <p className="text-xs text-stone-400 mb-4">変更した箇所だけ修正してください</p>
           <div className="space-y-3">
-            {items.map((item) => {
+            {items.map((item, idx) => {
               if (item.type === 'section') {
                 return (
                   <div key={item.key} className="flex gap-2 items-center pt-2">
@@ -259,8 +279,16 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
                       onChange={e => setItems(prev => prev.map(it => it.key === item.key ? { ...it, name: e.target.value } : it))}
                       placeholder="セクション名（例: タルト生地）"
                       className="flex-1 border-0 border-b-2 border-orange-300 bg-transparent px-1 py-1 text-sm font-semibold text-orange-700 focus:outline-none focus:border-orange-500" />
-                    <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
-                      className="text-stone-300 hover:text-red-400 px-1 text-lg">×</button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button type="button" onClick={() => setItems(prev => moveItemUp(prev, item.key))} disabled={idx === 0}
+                        title="上に移動" className="text-stone-300 hover:text-orange-500 disabled:opacity-20 px-1 text-sm">▲</button>
+                      <button type="button" onClick={() => setItems(prev => moveItemDown(prev, item.key))} disabled={idx === items.length - 1}
+                        title="下に移動" className="text-stone-300 hover:text-orange-500 disabled:opacity-20 px-1 text-sm">▼</button>
+                      <button type="button" onClick={() => setItems(prev => insertIngredientAfter(prev, item.key))}
+                        title="この下に材料を追加" className="text-stone-300 hover:text-green-600 px-1 text-base">＋</button>
+                      <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== item.key))}
+                        className="text-stone-300 hover:text-red-400 px-1 text-lg">×</button>
+                    </div>
                   </div>
                 )
               }
@@ -287,8 +315,16 @@ export default function ImprovePage({ params }: { params: Promise<{ id: string }
                         </div>
                       )}
                     </div>
-                    <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== row.key))}
-                      className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg">×</button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button type="button" onClick={() => setItems(prev => moveItemUp(prev, row.key))} disabled={idx === 0}
+                        title="上に移動" className="text-stone-400 hover:text-orange-500 disabled:opacity-20 px-1 py-2 text-sm">▲</button>
+                      <button type="button" onClick={() => setItems(prev => moveItemDown(prev, row.key))} disabled={idx === items.length - 1}
+                        title="下に移動" className="text-stone-400 hover:text-orange-500 disabled:opacity-20 px-1 py-2 text-sm">▼</button>
+                      <button type="button" onClick={() => setItems(prev => insertIngredientAfter(prev, row.key))}
+                        title="この下に材料を追加" className="text-stone-400 hover:text-green-600 px-1 py-2 text-base">＋</button>
+                      <button type="button" onClick={() => setItems(prev => prev.filter(it => it.key !== row.key))}
+                        className="text-stone-400 hover:text-red-500 px-1 py-2 text-lg">×</button>
+                    </div>
                   </div>
                   <div className="flex gap-2 items-center">
                     <input type="number" value={row.amount} onChange={e => updIng(row.key, { amount: e.target.value })}
